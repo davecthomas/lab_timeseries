@@ -1,0 +1,35 @@
+[project]
+name = "lab-timeseries-grapher"
+version = "0.1.0"
+description = "Plot per-test time series with normal range bands from a cleaned labs CSV"
+requires-python = ">=3.10"
+
+dependencies = [
+    "pandas<2.3.3",
+    "numpy>=1.26.0",
+    "python-dateutil>=2.9.0.post0",
+    "plotly>=5.24.0",
+    "dash>=2.17.0",
+]
+
+[project.scripts]
+lab-timeseries-grapher = "lab_timeseries_grapher.lab_timeseries_grapher:main"
+
+[tool.poetry]
+name = "lab-timeseries-grapher"
+version = "0.1.0"
+description = "Plot per-test time series with normal range bands from a cleaned labs CSV"
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+pandas = "<2.3.3"
+numpy = ">=1.26.0"
+python-dateutil = ">=2.9.0.post0"
+plotly = ">=5.24.0"
+dash = ">=2.17.0"
+
+[tool.poetry.scripts]
+lab-timeseries-grapher = "lab_timeseries_grapher.lab_timeseries_grapher:main"
+
+[tool.ruff]
+line-length = 100
