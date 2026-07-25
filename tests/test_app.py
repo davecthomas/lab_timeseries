@@ -141,3 +141,8 @@ class TestCreateApp:
         app = create_app(sample_metrics())
         assert app.title == "Blood Metrics"
         assert app.layout is not None
+
+    def test_index_restricts_image_sources(self):
+        app = create_app(sample_metrics())
+        assert "Content-Security-Policy" in app.index_string
+        assert "img-src 'self' data: blob:;" in app.index_string

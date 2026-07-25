@@ -280,6 +280,13 @@ body {
 """
 
 
+# AI commentary is model-generated markdown. Images are the one element that
+# would fetch a remote URL on render, so pin them to local/inline sources; a
+# crafted result string cannot turn a chart into a beacon. Scoped to img-src
+# only, since Dash and Plotly need inline scripts and styles.
+CSP_IMG = "img-src 'self' data: blob:;"
+
+
 def index_string() -> str:
     """Dash index template with the theme's inline stylesheet."""
     return (
@@ -287,6 +294,7 @@ def index_string() -> str:
         "<html>"
         "<head>"
         "{%metas%}"
+        f'<meta http-equiv="Content-Security-Policy" content="{CSP_IMG}">'
         "<title>{%title%}</title>"
         "{%favicon%}"
         "{%css%}"
