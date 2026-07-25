@@ -131,24 +131,35 @@ RUN_TRIGGERS = {RUN_PROP, ANALYZE_PROP}
 def is_run_request(
     runs: int | None, last_run: int | None, changed_props: object = ()
 ) -> bool:
-    """True when the analyze button asked for a fresh run.
+    """True when the consent gate authorized a fresh run on this invocation.
 
-    Clicking analyze changes both `ai-analyze` and `ai-run-count` inside one
-    callback chain. Dash then invokes the pane callback once and reports only
-    the first of them as `ctx.triggered_id`, so dispatching on that id alone
-    silently swallows the request. The run prop appearing among the changed
-    props is therefore backed up by a counter comparison.
+    Both conditions are required, and each covers a distinct failure:
 
-    That counter comparison is confined to the analyze chain. `ai-last-run`
-    only advances when this callback *returns*, so while a request is in
-    flight the client holds `runs = N` against `last_run = N - 1`; letting any
-    trigger satisfy the comparison would turn a close, an index click, or a
-    selection change into a second unconsented request.
+    - **The run prop must have changed.** `ai-run-count` is written only by
+      the consent gate. `ai-last-run` advances only when this callback
+      *returns*, so during a pending request the client holds `runs = N`
+      against `last_run = N - 1`. Any invocation in that window — a close, an
+      index click, or a second analyze click while the dialog is open — would
+      otherwise spend that gap on an unconsented request.
+    - **The counter must have advanced.** `ctx.triggered_id` reports only the
+      first trigger of a coalesced chain, so the prop check reads
+      `ctx.triggered_prop_ids`, which lists them all; the counter comparison
+      then guards against replaying a value already handled.
     """
     props = set(changed_props or ())
-    if RUN_PROP in props:
-        return True
-    return bool(props) and props <= RUN_TRIGGERS and (runs or 0) > (last_run or 0)
+    advanced = (runs or 0) > (last_run or 0)
+    if RUN_PROP not in props:
+        if ANALYZE_PROP in props and advanced:
+            # Would mean Dash coalesced the chain without reporting the run
+            # prop, which is the case the prop check assumes cannot happen.
+            # Refusing is the safe default; this line names the reason.
+            logger.warning(
+                "Analyze click carried no %s among %s; refusing to run without it",
+                RUN_PROP,
+                sorted(props),
+            )
+        return False
+    return advanced
 
 
 class PaneState(NamedTuple):

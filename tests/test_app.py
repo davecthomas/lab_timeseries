@@ -157,40 +157,45 @@ class TestConsentGate:
 
 
 class TestIsRunRequest:
-    """The run prop is authoritative. The counter comparison backs it up for
-    coalesced invocations, but only within the analyze chain: `ai-last-run`
-    lags while a request is in flight, so a counter test open to any trigger
-    would let an unrelated click start a second unconsented request."""
-
-    def test_run_prop_is_a_run(self):
-        assert is_run_request(1, 1, {"ai-run-count.data": "ai-run-count"}) is True
+    """A run needs the consent gate's own prop AND an advanced counter.
+    `ai-last-run` lags while a request is pending, so anything weaker lets an
+    invocation in that window spend the gap on an unconsented request."""
 
     def test_coalesced_click_is_a_run(self):
         changed = {"ai-analyze.n_clicks": "ai-analyze", "ai-run-count.data": "ai-run-count"}
         assert is_run_request(2, 1, changed) is True
 
-    def test_analyze_prop_with_advanced_counter_is_a_run(self):
-        assert is_run_request(2, 1, {"ai-analyze.n_clicks": "ai-analyze"}) is True
+    def test_consent_yes_is_a_run(self):
+        assert is_run_request(1, 0, {"ai-run-count.data": "ai-run-count"}) is True
 
-    def test_analyze_prop_without_counter_movement_is_not_a_run(self):
-        assert is_run_request(1, 1, {"ai-analyze.n_clicks": "ai-analyze"}) is False
+    def test_analyze_click_alone_never_runs(self):
+        """The dialog may be open and unanswered: the click is not consent."""
+        assert is_run_request(1, 0, {"ai-analyze.n_clicks": "ai-analyze"}) is False
+        assert is_run_request(2, 1, {"ai-analyze.n_clicks": "ai-analyze"}) is False
 
     def test_unrelated_trigger_never_runs_even_with_a_lagging_counter(self):
         for prop in ("ai-close.n_clicks", "selection-store.data", "date-window.value"):
             assert is_run_request(2, 1, {prop: "x"}) is False, prop
 
     def test_counter_alone_is_not_enough(self):
-        # No trigger information: refuse rather than guess.
         assert is_run_request(2, 1) is False
         assert is_run_request(1, 0) is False
 
-    def test_stale_counter_does_not_replay(self):
-        assert is_run_request(2, 5, {"ai-analyze.n_clicks": "ai-analyze"}) is False
+    def test_run_prop_without_counter_movement_does_not_replay(self):
+        assert is_run_request(1, 1, {"ai-run-count.data": "ai-run-count"}) is False
+        assert is_run_request(2, 5, {"ai-run-count.data": "ai-run-count"}) is False
 
     def test_handles_none(self):
         assert is_run_request(None, None) is False
-        assert is_run_request(1, None, {"ai-analyze.n_clicks": "x"}) is True
-        assert is_run_request(None, 3, {"ai-analyze.n_clicks": "x"}) is False
+        assert is_run_request(1, None, {"ai-run-count.data": "x"}) is True
+        assert is_run_request(None, 3, {"ai-run-count.data": "x"}) is False
+
+    def test_refusal_without_the_run_prop_is_logged(self, caplog):
+        """If Dash ever coalesced without reporting the run prop, the button
+        would no-op; the log says why rather than leaving it a mystery."""
+        with caplog.at_level("WARNING"):
+            assert is_run_request(2, 1, {"ai-analyze.n_clicks": "ai-analyze"}) is False
+        assert "refusing to run" in caplog.text
 
 
 class TestConsentPredicates:

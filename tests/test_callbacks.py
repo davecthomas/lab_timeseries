@@ -75,15 +75,25 @@ class TestRunDetection:
         update(provider, {"ai-run-count.data": 1}, runs=1)
         assert provider.calls == [["ALT"]]
 
-    def test_analyze_prop_alone_with_advanced_counter_runs(self, provider):
-        # Covers a coalesced call that reports only the button prop.
-        update(provider, {"ai-analyze.n_clicks": 1}, trigger="ai-analyze", runs=1)
-        assert provider.calls == [["ALT"]]
-
     def test_button_without_consent_does_not_run(self, provider):
         """No counter movement: the button opened the dialog, nothing more."""
         update(provider, {"ai-analyze.n_clicks": 1}, trigger="ai-analyze", runs=0)
         assert provider.calls == []
+
+    def test_analyze_click_while_the_dialog_is_open_does_not_run(self, provider):
+        """Consent was not remembered, so a second click re-opens the dialog.
+        Nothing may be sent while that dialog sits unanswered, even though the
+        counter is ahead of last_run from the still-pending first run."""
+        state = update(
+            provider,
+            {"ai-analyze.n_clicks": 1},
+            trigger="ai-analyze",
+            runs=1,
+            last_run=0,
+            ordered=("ALT", "AST"),
+        )
+        assert provider.calls == []
+        assert state.entries == []
 
     def test_steady_state_interaction_does_not_run(self, provider):
         update(provider, {"selection-store.data": 1}, trigger="selection-store", runs=1, last_run=1)
