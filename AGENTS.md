@@ -17,7 +17,8 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 
 | Task | Command |
 |---|---|
-| Run app | `make` (installs deps, serves http://127.0.0.1:8050; `PORT=` to override) |
+| Run app | `make` (installs deps, reclaims the port, serves http://127.0.0.1:8050; `PORT=` to override) |
+| Stop app | `make stop` |
 | Test | `make test` |
 | Lint | `make lint` |
 | Lint + test | `make check` |

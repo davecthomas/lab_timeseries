@@ -77,6 +77,8 @@ make
 
 That installs dependencies (first run only) and starts the app. Open http://127.0.0.1:8050 in your browser. Use `make run PORT=8080` for a different port, and `make help` to list all targets.
 
+Re-running `make` stops whatever is already serving the port and starts fresh, so you never end up reading stale code from an old server. `make stop` ends the running app without starting a new one.
+
 Without make: `poetry install`, then `poetry run lab-timeseries-grapher`.
 
 ### Arguments
