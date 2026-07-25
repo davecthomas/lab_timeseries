@@ -1,18 +1,25 @@
 import pandas as pd
 
 from lab_timeseries_grapher.app import (
-    ai_panel,
     consent_denied,
     consent_granted,
     create_app,
     filter_rows,
+    is_run_request,
     merge_selection,
     resolve_consent,
+    resolve_pane_view,
     resolve_selection,
     selection_order,
 )
 from lab_timeseries_grapher.data import MetricSeries
-from lab_timeseries_grapher.layout import build_table_rows, window_cutoff
+from lab_timeseries_grapher.layout import (
+    ai_error,
+    build_table_rows,
+    render_analysis,
+    render_index,
+    window_cutoff,
+)
 
 
 def make_metric(name, values, band=(2.0, 8.0), panel="CMP", start="2024-01-01"):
@@ -149,6 +156,40 @@ class TestConsentGate:
         assert resolve_consent(None, None, [], 7) == (False, None, 7)
 
 
+class TestIsRunRequest:
+    """Dash coalesces ai-analyze and ai-run-count into one invocation and
+    reports only the first as ctx.triggered_id, so neither signal alone is
+    enough to detect the run."""
+
+    def test_counter_advanced_is_a_run(self):
+        assert is_run_request(2, 1) is True
+
+    def test_counter_unchanged_is_not_a_run(self):
+        assert is_run_request(1, 1) is False
+
+    def test_first_run_from_zero(self):
+        assert is_run_request(1, 0) is True
+
+    def test_handles_none(self):
+        assert is_run_request(None, None) is False
+        assert is_run_request(1, None) is True
+        assert is_run_request(None, 3) is False
+
+    def test_stale_counter_does_not_replay(self):
+        assert is_run_request(2, 5) is False
+
+    def test_changed_prop_alone_is_a_run(self):
+        # Covers a coalesced call that carries the pre-chain counter value.
+        assert is_run_request(1, 1, {"ai-run-count.data": "ai-run-count"}) is True
+
+    def test_other_changed_props_are_not_a_run(self):
+        assert is_run_request(1, 1, {"ai-close.n_clicks": "ai-close"}) is False
+
+    def test_coalesced_click_is_a_run(self):
+        changed = {"ai-analyze.n_clicks": "ai-analyze", "ai-run-count.data": "ai-run-count"}
+        assert is_run_request(2, 1, changed) is True
+
+
 class TestConsentPredicates:
     def test_granted(self):
         assert consent_granted({"decision": "granted"}) is True
@@ -161,15 +202,67 @@ class TestConsentPredicates:
         assert consent_denied(None) is False
 
 
-class TestAiPanel:
-    def test_error_panel_marked(self):
-        panel = ai_panel("boom", error=True)
-        assert "ai-error" in panel.className
+def entry(entry_id="1", key="k1", label="MCV"):
+    return {"id": entry_id, "key": key, "label": label, "count": 1, "window": "all"}
 
-    def test_success_panel_reports_count(self):
-        panel = ai_panel("## Summary", count=3)
-        assert "ai-error" not in panel.className
-        assert "3 metric(s)" in panel.children[0].children[1]
+
+class TestResolvePaneView:
+    def test_close_hides_the_pane(self):
+        assert resolve_pane_view("ai-close", [entry()], "k1", "1", True) == ("1", False)
+
+    def test_index_click_selects_that_analysis(self):
+        trigger = {"type": "ai-index-item", "index": "2"}
+        assert resolve_pane_view(trigger, [entry()], "k1", "1", False) == ("2", True)
+
+    def test_button_reveals_a_held_analysis(self):
+        assert resolve_pane_view("ai-analyze", [entry()], "k1", None, False) == ("1", True)
+
+    def test_button_without_a_held_analysis_changes_nothing(self):
+        # The run itself arrives via the counter, not through this path.
+        assert resolve_pane_view("ai-analyze", [], "k9", None, False) == (None, False)
+
+    def test_selection_change_hides_a_mismatched_analysis(self):
+        assert resolve_pane_view("selection-store", [entry()], "k9", "1", True) == ("1", False)
+
+    def test_selection_change_reveals_the_matching_analysis(self):
+        entries = [entry("1", "k1"), entry("2", "k2", "RDW")]
+        assert resolve_pane_view("selection-store", entries, "k2", "1", True) == ("2", True)
+
+    def test_closed_pane_stays_closed_on_selection_change(self):
+        assert resolve_pane_view("selection-store", [entry()], "k1", "1", False) == ("1", False)
+
+    def test_no_selection_leaves_a_closed_pane_alone(self):
+        assert resolve_pane_view("date-window", [entry()], None, "1", False) == ("1", False)
+
+
+class TestPaneRendering:
+    def test_error_body_is_marked(self):
+        body = ai_error("boom")
+        assert body[0].children.className.endswith("is-error")
+
+    def test_analysis_body_has_copy_target(self):
+        entry = {"id": "1", "label": "MCV", "text": "## Summary"}
+        body = render_analysis(entry)
+        clipboard = body[0].children[1]
+        assert clipboard.target_id == "ai-body-text"
+        assert body[1].id == "ai-body-text"
+
+    def test_empty_body_prompts(self):
+        body = render_analysis(None)
+        assert "Select an analysis" in body[0].children
+
+    def test_index_is_empty_without_analyses(self):
+        assert render_index([], None, None) == []
+
+    def test_index_marks_active_and_current(self):
+        entries = [
+            {"id": "1", "key": "k1", "label": "MCV", "count": 1, "window": "all", "created": "2:00 PM"},
+            {"id": "2", "key": "k2", "label": "RDW", "count": 1, "window": "all", "created": "1:00 PM"},
+        ]
+        rows = render_index(entries, "1", "k2")
+        assert "is-active" in rows[1].className
+        assert "is-active" not in rows[2].className
+        assert "current selection" in rows[2].children.children[1].children
 
 
 class TestSelectionOrder:
