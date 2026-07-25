@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import NamedTuple
 
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
@@ -123,6 +124,8 @@ def resolve_consent(
 
 
 RUN_PROP = "ai-run-count.data"
+ANALYZE_PROP = "ai-analyze.n_clicks"
+RUN_TRIGGERS = {RUN_PROP, ANALYZE_PROP}
 
 
 def is_run_request(
@@ -133,11 +136,74 @@ def is_run_request(
     Clicking analyze changes both `ai-analyze` and `ai-run-count` inside one
     callback chain. Dash then invokes the pane callback once and reports only
     the first of them as `ctx.triggered_id`, so dispatching on that id alone
-    silently swallows the request. Two independent signals are checked: the
-    run prop appearing among the changed props, and the counter having moved
-    past the last handled value.
+    silently swallows the request. The run prop appearing among the changed
+    props is therefore backed up by a counter comparison.
+
+    That counter comparison is confined to the analyze chain. `ai-last-run`
+    only advances when this callback *returns*, so while a request is in
+    flight the client holds `runs = N` against `last_run = N - 1`; letting any
+    trigger satisfy the comparison would turn a close, an index click, or a
+    selection change into a second unconsented request.
     """
-    return RUN_PROP in set(changed_props or ()) or (runs or 0) > (last_run or 0)
+    props = set(changed_props or ())
+    if RUN_PROP in props:
+        return True
+    return bool(props) and props <= RUN_TRIGGERS and (runs or 0) > (last_run or 0)
+
+
+class PaneState(NamedTuple):
+    entries: list[dict]
+    active: str | None
+    visible: bool
+    last_run: int
+    error: str | None = None
+
+
+def pane_update(
+    *,
+    trigger: object,
+    changed_props: object,
+    runs: int | None,
+    last_run: int | None,
+    ordered: list[str],
+    window: str | None,
+    entries: list[dict],
+    active: str | None,
+    visible: bool,
+    run_analysis,
+    now,
+) -> PaneState:
+    """Next pane state for one callback invocation.
+
+    Pure apart from `run_analysis`, which is injected so the decision — above
+    all, *whether to call the provider at all* — can be exercised without a
+    Dash context or a network call.
+    """
+    runs, last_run = runs or 0, last_run or 0
+    entries = list(entries or [])
+
+    if not is_run_request(runs, last_run, changed_props):
+        active, visible = resolve_pane_view(
+            trigger, entries, analyses.selection_key(ordered, window) if ordered else None,
+            active, visible,
+        )
+        return PaneState(entries, active, visible, last_run)
+
+    if not ordered:
+        return PaneState(
+            entries, active, True, runs, "Select at least one metric, then run the analysis."
+        )
+
+    try:
+        text = run_analysis(ordered, window)
+    except CommentaryError as exc:
+        return PaneState(entries, active, True, runs, str(exc))
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Unexpected error generating AI commentary")
+        return PaneState(entries, active, True, runs, "Something went wrong generating the analysis.")
+
+    entry = analyses.make_analysis(ordered, window, text, now())
+    return PaneState(analyses.upsert(entries, entry), entry["id"], True, runs)
 
 
 def resolve_pane_view(
@@ -319,42 +385,31 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
     def update_pane(
         runs, _close, _show, _items, stored, window, visible_rows, entries, active, visible, last_run
     ):
-        trigger = ctx.triggered_id
-        entries = entries or []
         ordered = selection_order(stored or [], visible_rows)
+        state = pane_update(
+            trigger=ctx.triggered_id,
+            changed_props=ctx.triggered_prop_ids,
+            runs=runs,
+            last_run=last_run,
+            ordered=ordered,
+            window=window,
+            entries=entries or [],
+            active=active,
+            visible=visible,
+            run_analysis=lambda names, win: generate_commentary(
+                metrics, names, window_cutoff(metrics, win or "all")
+            ),
+            now=datetime.now,
+        )
+
         current_key = analyses.selection_key(ordered, window) if ordered else None
-        error: str | None = None
-        # A run is detected by the counter moving, not by ctx.triggered_id:
-        # clicking the button changes ai-analyze and ai-run-count in one
-        # chain, and Dash then runs this callback once, reporting only the
-        # first trigger. Comparing against the last handled value is immune
-        # to that coalescing.
-        runs, last_run = runs or 0, last_run or 0
-        is_run = is_run_request(runs, last_run, ctx.triggered_prop_ids)
-
-        if is_run:
-            last_run = runs
-            if not ordered:
-                error = "Select at least one metric, then run the analysis."
-                visible = True
-            else:
-                cutoff = window_cutoff(metrics, window or "all")
-                try:
-                    text = generate_commentary(metrics, ordered, cutoff)
-                    entry = analyses.make_analysis(ordered, window, text, datetime.now())
-                    entries = analyses.upsert(entries, entry)
-                    active, visible = entry["id"], True
-                except CommentaryError as exc:
-                    error, visible = str(exc), True
-                except Exception:  # pragma: no cover - defensive
-                    logger.exception("Unexpected error generating AI commentary")
-                    error, visible = "Something went wrong generating the analysis.", True
-        else:
-            active, visible = resolve_pane_view(trigger, entries, current_key, active, visible)
-
-        body = ai_error_body(error) if error else render_analysis(analyses.find(entries, active))
-        index = render_index(entries, active, current_key)
-        return body, index, entries, active, visible, last_run
+        body = (
+            ai_error_body(state.error)
+            if state.error
+            else render_analysis(analyses.find(state.entries, state.active))
+        )
+        index = render_index(state.entries, state.active, current_key)
+        return body, index, state.entries, state.active, state.visible, state.last_run
 
     @app.callback(
         Output("ai-pane", "style"),

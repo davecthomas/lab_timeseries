@@ -1,165 +1,199 @@
-"""Exercise of the AI pane callback through Dash's own machinery.
+"""The AI pane's decision logic, including when the provider may be called.
 
-These cover the run path, which is driven by the run counter rather than by
-`ctx.triggered_id`: clicking analyze changes `ai-analyze` and `ai-run-count`
-in one chain, Dash invokes the callback once, and reports only the first as
-the trigger. A dispatch keyed on that id alone drops the run, which is the
-bug these cover.
+`pane_update` is the whole callback body with `run_analysis` injected, so
+every path — above all "does this invocation reach the network" — is
+exercised without a Dash context or an HTTP request.
 
-Dash's wrapper rebuilds the callback context from the request, so a test
-cannot inject a specific `triggered_id`. Trigger-driven behavior (close,
-index selection, reveal) is covered against `resolve_pane_view` in
-test_app.py instead.
+Two bugs live here and must stay covered:
+
+1. Clicking analyze changes `ai-analyze` and `ai-run-count` in one chain.
+   Dash invokes the callback once and reports only the first as the trigger,
+   so a dispatch keyed on the trigger alone silently drops the run.
+2. `ai-last-run` only advances when the callback returns, so while a request
+   is in flight the client holds `runs = N` against `last_run = N - 1`. A
+   counter comparison that any trigger could satisfy would turn a close, an
+   index click, or a selection change into a second unconsented request.
 """
 
-import json
+from datetime import datetime
 
-import pandas as pd
 import pytest
-from dash._callback_context import context_value
-from dash._utils import AttributeDict
 
-from lab_timeseries_grapher import app as appmod
-from lab_timeseries_grapher.data import MetricSeries
+from lab_timeseries_grapher.app import pane_update
+from lab_timeseries_grapher.commentary import CommentaryError
 
-OUTPUTS = [
-    {"id": "ai-pane-body", "property": "children"},
-    {"id": "ai-index", "property": "children"},
-    {"id": "ai-analyses", "property": "data"},
-    {"id": "ai-active", "property": "data"},
-    {"id": "ai-visible", "property": "data"},
-    {"id": "ai-last-run", "property": "data"},
-]
-
-
-def make_metric(name):
-    return MetricSeries(
-        name=name,
-        dates=[pd.Timestamp("2021-01-01"), pd.Timestamp("2025-01-01")],
-        values=[23.0, 25.0],
-        display_values=["23", "25"],
-        band=(0.0, 50.0),
-        units="U/L",
-        panel="CMP",
-    )
+NOW = lambda: datetime(2026, 7, 25, 17, 30, 0)  # noqa: E731
 
 
 @pytest.fixture
-def pane(monkeypatch):
-    """The registered pane callback, with the provider call stubbed out."""
-    calls = []
+def provider():
+    """Records every call, so 'was the provider reached' is assertable."""
 
-    def fake_commentary(metrics, ordered, cutoff):
-        calls.append(list(ordered))
-        return f"## Summary\ncommentary for {', '.join(ordered)}"
+    class Provider:
+        def __init__(self):
+            self.calls = []
 
-    monkeypatch.setattr(appmod, "generate_commentary", fake_commentary)
-    application = appmod.create_app({"ALT": make_metric("ALT"), "AST": make_metric("AST")})
-    key = next(k for k in application.callback_map if "ai-pane-body" in k)
-    callback = application.callback_map[key]["callback"]
+        def __call__(self, names, window):
+            self.calls.append(list(names))
+            return f"## Summary\ncommentary for {', '.join(names)}"
 
-    def run(
-        changed,
-        *,
-        runs=0,
-        last_run=0,
-        selection=("ALT",),
-        window="all",
-        entries=None,
-        active=None,
-        visible=False,
-        index_clicks=None,
-    ):
-        context_value.set(
-            AttributeDict(triggered_inputs=[{"prop_id": p, "value": 1} for p in changed])
-        )
-        raw = callback(
-            runs,
-            0,
-            1,
-            index_clicks or [],
-            list(selection),
-            window,
-            [{"id": name} for name in selection],
-            entries or [],
-            active,
-            visible,
-            last_run,
-            outputs_list=OUTPUTS,
-        )
-        return json.loads(raw)["response"]
-
-    run.calls = calls
-    return run
+    return Provider()
 
 
-class TestRunDispatch:
-    def test_coalesced_click_runs_the_analysis(self, pane):
+def update(provider, changed, *, trigger=None, runs=0, last_run=0, ordered=("ALT",), **kw):
+    return pane_update(
+        trigger=trigger,
+        changed_props=changed,
+        runs=runs,
+        last_run=last_run,
+        ordered=list(ordered),
+        window=kw.get("window", "all"),
+        entries=kw.get("entries", []),
+        active=kw.get("active"),
+        visible=kw.get("visible", False),
+        run_analysis=provider,
+        now=NOW,
+    )
+
+
+class TestRunDetection:
+    def test_coalesced_click_runs_the_analysis(self, provider):
         """Regression: both props change in one invocation, only the first is
-        reported as the trigger. The run must still happen."""
-        out = pane(["ai-analyze.n_clicks", "ai-run-count.data"], runs=1, last_run=0)
-        assert len(out["ai-analyses"]["data"]) == 1
-        assert out["ai-visible"]["data"] is True
-        assert out["ai-last-run"]["data"] == 1
-        assert pane.calls == [["ALT"]]
+        reported as the trigger."""
+        state = update(
+            provider,
+            {"ai-analyze.n_clicks": 1, "ai-run-count.data": 1},
+            trigger="ai-analyze",
+            runs=1,
+        )
+        assert provider.calls == [["ALT"]]
+        assert len(state.entries) == 1
+        assert state.visible is True
+        assert state.last_run == 1
 
-    def test_run_prop_alone_runs_the_analysis(self, pane):
-        out = pane(["ai-run-count.data"], runs=1, last_run=0)
-        assert len(out["ai-analyses"]["data"]) == 1
+    def test_run_prop_alone_runs_the_analysis(self, provider):
+        update(provider, {"ai-run-count.data": 1}, runs=1)
+        assert provider.calls == [["ALT"]]
 
-    def test_button_without_counter_change_does_not_run(self, pane):
-        """No consent yet: the button opens the dialog, it does not analyze."""
-        out = pane(["ai-analyze.n_clicks"], runs=0, last_run=0)
-        assert out["ai-analyses"]["data"] == []
-        assert pane.calls == []
+    def test_analyze_prop_alone_with_advanced_counter_runs(self, provider):
+        # Covers a coalesced call that reports only the button prop.
+        update(provider, {"ai-analyze.n_clicks": 1}, trigger="ai-analyze", runs=1)
+        assert provider.calls == [["ALT"]]
 
-    def test_stale_counter_does_not_replay(self, pane):
-        out = pane(["selection-store.data"], runs=1, last_run=1)
-        assert pane.calls == []
-        assert out["ai-analyses"]["data"] == []
+    def test_button_without_consent_does_not_run(self, provider):
+        """No counter movement: the button opened the dialog, nothing more."""
+        update(provider, {"ai-analyze.n_clicks": 1}, trigger="ai-analyze", runs=0)
+        assert provider.calls == []
 
-    def test_empty_selection_reports_instead_of_calling(self, pane):
-        out = pane(["ai-run-count.data"], runs=1, last_run=0, selection=())
-        assert pane.calls == []
-        assert out["ai-visible"]["data"] is True
-        assert out["ai-analyses"]["data"] == []
+    def test_steady_state_interaction_does_not_run(self, provider):
+        update(provider, {"selection-store.data": 1}, trigger="selection-store", runs=1, last_run=1)
+        assert provider.calls == []
 
 
-class TestPaneState:
-    def test_second_selection_adds_a_second_analysis(self, pane):
-        first = pane(["ai-run-count.data"], runs=1, last_run=0, selection=("ALT",))
-        out = pane(
-            ["ai-run-count.data"],
+class TestInFlightRace:
+    """While a request is pending the counter is ahead of last_run. No
+    unrelated trigger may spend that gap on a second request."""
+
+    @pytest.mark.parametrize(
+        "prop,trigger",
+        [
+            ("ai-close.n_clicks", "ai-close"),
+            ("selection-store.data", "selection-store"),
+            ("date-window.value", "date-window"),
+            ('{"index":"1","type":"ai-index-item"}.n_clicks', {"type": "ai-index-item", "index": "1"}),
+        ],
+    )
+    def test_interaction_during_a_pending_run_does_not_call_the_provider(
+        self, provider, prop, trigger
+    ):
+        state = update(provider, {prop: 1}, trigger=trigger, runs=2, last_run=1)
+        assert provider.calls == []
+        assert state.last_run == 1  # the pending run still owns the counter
+
+    def test_close_during_a_pending_run_still_closes(self, provider):
+        state = update(
+            provider, {"ai-close.n_clicks": 1}, trigger="ai-close", runs=2, last_run=1, visible=True
+        )
+        assert state.visible is False
+        assert provider.calls == []
+
+
+class TestAnalysesLifecycle:
+    def test_second_selection_adds_a_second_analysis(self, provider):
+        first = update(provider, {"ai-run-count.data": 1}, runs=1, ordered=("ALT",))
+        second = update(
+            provider,
+            {"ai-run-count.data": 1},
             runs=2,
             last_run=1,
-            selection=("AST",),
-            entries=first["ai-analyses"]["data"],
+            ordered=("AST",),
+            entries=first.entries,
         )
-        held = out["ai-analyses"]["data"]
-        assert len(held) == 2
-        assert {e["label"] for e in held} == {"ALT", "AST"}
+        assert {e["label"] for e in second.entries} == {"ALT", "AST"}
 
-    def test_rerunning_a_selection_replaces_its_entry(self, pane):
-        first = pane(["ai-run-count.data"], runs=1, last_run=0, selection=("ALT",))
-        out = pane(
-            ["ai-run-count.data"],
-            runs=2,
-            last_run=1,
-            selection=("ALT",),
-            entries=first["ai-analyses"]["data"],
+    def test_rerunning_a_selection_replaces_its_entry(self, provider):
+        first = update(provider, {"ai-run-count.data": 1}, runs=1)
+        second = update(
+            provider, {"ai-run-count.data": 1}, runs=2, last_run=1, entries=first.entries
         )
-        assert len(out["ai-analyses"]["data"]) == 1
+        assert len(second.entries) == 1
+        assert provider.calls == [["ALT"], ["ALT"]]
 
-    def test_analyses_survive_a_non_run_interaction(self, pane):
-        """Held analyses last the session even when the pane re-renders."""
-        first = pane(["ai-run-count.data"], runs=1, last_run=0, selection=("ALT",))
-        out = pane(
-            ["selection-store.data"],
+    def test_changing_selection_hides_but_keeps_the_analysis(self, provider):
+        first = update(provider, {"ai-run-count.data": 1}, runs=1, ordered=("ALT",))
+        state = update(
+            provider,
+            {"selection-store.data": 1},
+            trigger="selection-store",
             runs=1,
             last_run=1,
-            selection=("AST",),
-            entries=first["ai-analyses"]["data"],
+            ordered=("AST",),
+            entries=first.entries,
             visible=True,
         )
-        assert len(out["ai-analyses"]["data"]) == 1
-        assert pane.calls == [["ALT"]]  # no extra request
+        assert state.visible is False
+        assert len(state.entries) == 1
+
+    def test_returning_to_a_selection_reveals_it_without_a_request(self, provider):
+        first = update(provider, {"ai-run-count.data": 1}, runs=1, ordered=("ALT",))
+        state = update(
+            provider,
+            {"ai-analyze.n_clicks": 1},
+            trigger="ai-analyze",
+            runs=1,
+            last_run=1,
+            ordered=("ALT",),
+            entries=first.entries,
+        )
+        assert state.visible is True
+        assert state.active == first.entries[0]["id"]
+        assert provider.calls == [["ALT"]]  # revealed, not re-requested
+
+
+class TestFailurePaths:
+    def test_empty_selection_reports_without_calling(self, provider):
+        state = update(provider, {"ai-run-count.data": 1}, runs=1, ordered=())
+        assert provider.calls == []
+        assert "at least one metric" in state.error
+        assert state.entries == []
+
+    def test_provider_error_surfaces_and_holds_nothing(self, provider):
+        def boom(names, window):
+            raise CommentaryError("no API key")
+
+        state = pane_update(
+            trigger=None,
+            changed_props={"ai-run-count.data": 1},
+            runs=1,
+            last_run=0,
+            ordered=["ALT"],
+            window="all",
+            entries=[],
+            active=None,
+            visible=False,
+            run_analysis=boom,
+            now=NOW,
+        )
+        assert state.error == "no API key"
+        assert state.entries == []
+        assert state.last_run == 1  # consumed, so the failure does not retry itself

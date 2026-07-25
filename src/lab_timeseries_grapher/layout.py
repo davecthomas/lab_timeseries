@@ -205,7 +205,14 @@ def ai_pane() -> html.Aside:
                 ],
             ),
             html.Div(id="ai-index", className="ai-index"),
-            html.Div(id="ai-pane-body", className="ai-pane-body"),
+            # The request can run for tens of seconds; without this the pane
+            # looks idle and invites clicks mid-flight.
+            dcc.Loading(
+                id="ai-loading",
+                type="dot",
+                color=theme.SERIES,
+                children=html.Div(id="ai-pane-body", className="ai-pane-body"),
+            ),
         ],
     )
 
