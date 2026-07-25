@@ -214,6 +214,16 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                     value=[],
                 ),
             ),
+            html.Div(
+                className="selection-actions",
+                children=[
+                    html.Button("Select all", id="select-all", className="link-button", n_clicks=0),
+                    html.Button(
+                        "Clear all", id="clear-all", className="link-button", n_clicks=0
+                    ),
+                    html.Span(id="selection-count", className="selection-count"),
+                ],
+            ),
             metric_table(table_rows, initial_selection),
         ],
     )
@@ -233,7 +243,19 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                         value="all",
                         inline=True,
                     ),
+                    html.Button(
+                        [html.Span("✦", className="ai-icon"), "Analysis with AI"],
+                        id="ai-analyze",
+                        className="ai-button",
+                        n_clicks=0,
+                    ),
                 ],
+            ),
+            dcc.Loading(
+                id="ai-loading",
+                type="dot",
+                color=theme.SERIES,
+                children=html.Div(id="ai-commentary"),
             ),
             html.Div(
                 id="graphs-container",

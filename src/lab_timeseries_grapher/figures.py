@@ -19,6 +19,15 @@ def filter_window(series: MetricSeries, cutoff: pd.Timestamp | None) -> list[int
     return [i for i, d in enumerate(series.dates) if d >= cutoff]
 
 
+def label_with_units(display: str, units: str) -> str:
+    """Add units to a display value, unless the source string already carries them."""
+    if not units:
+        return display
+    if display.strip().casefold().endswith(units.strip().casefold()):
+        return display
+    return f"{display} {units}"
+
+
 def make_figure(series: MetricSeries, cutoff: pd.Timestamp | None = None) -> go.Figure:
     """Build a themed time-series figure with the normal band and range flags."""
     idx = filter_window(series, cutoff)
@@ -39,7 +48,7 @@ def make_figure(series: MetricSeries, cutoff: pd.Timestamp | None = None) -> go.
             line_width=0,
         )
 
-    unit_suffix = f" {series.units}" if series.units else ""
+    labels = [label_with_units(d, series.units) for d in displays]
     fig.add_trace(
         go.Scatter(
             x=dates,
@@ -51,13 +60,17 @@ def make_figure(series: MetricSeries, cutoff: pd.Timestamp | None = None) -> go.
                 "color": theme.SERIES,
                 "line": {"color": theme.SURFACE, "width": 2},
             },
-            customdata=displays,
-            hovertemplate="<b>%{customdata}" + unit_suffix + "</b><br>%{x|%b %d, %Y}<extra></extra>",
+            customdata=labels,
+            hovertemplate="<b>%{customdata}</b><br>%{x|%b %d, %Y}<extra></extra>",
             showlegend=False,
         )
     )
 
-    flagged = [(d, v, disp, s) for d, v, disp, s in zip(dates, values, displays, statuses) if s in STATUS_HOVER]
+    flagged = [
+        (d, v, label, s)
+        for d, v, label, s in zip(dates, values, labels, statuses)
+        if s in STATUS_HOVER
+    ]
     if flagged:
         fig.add_trace(
             go.Scatter(
@@ -72,7 +85,7 @@ def make_figure(series: MetricSeries, cutoff: pd.Timestamp | None = None) -> go.
                 },
                 customdata=[[f[2], STATUS_HOVER[f[3]]] for f in flagged],
                 hovertemplate=(
-                    "<b>%{customdata[0]}" + unit_suffix + "</b> · %{customdata[1]}"
+                    "<b>%{customdata[0]}</b> · %{customdata[1]}"
                     "<br>%{x|%b %d, %Y}<extra></extra>"
                 ),
                 showlegend=False,
@@ -96,22 +109,30 @@ def make_figure(series: MetricSeries, cutoff: pd.Timestamp | None = None) -> go.
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font={"color": theme.INK_SECONDARY, "family": theme.FONT_STACK, "size": 12},
-        hoverlabel={"bgcolor": theme.PAGE_BG, "bordercolor": theme.BASELINE},
+        hoverlabel={
+            "bgcolor": theme.TOOLTIP_BG,
+            "bordercolor": theme.SERIES,
+            "font": {"color": theme.TOOLTIP_INK, "size": 13, "family": theme.FONT_STACK},
+        },
+        hovermode="closest",
         xaxis={
             "range": xaxis_range,
             "gridcolor": theme.GRIDLINE,
             "griddash": "solid",
             "gridwidth": 1,
             "linecolor": theme.BASELINE,
-            "tickfont": {"size": 11, "color": theme.INK_MUTED},
+            "tickfont": {"size": 11, "color": theme.INK_SECONDARY},
         },
         yaxis={
-            "title": {"text": series.units or None, "font": {"size": 11, "color": theme.INK_MUTED}},
+            "title": {
+                "text": series.units or None,
+                "font": {"size": 11, "color": theme.INK_SECONDARY},
+            },
             "gridcolor": theme.GRIDLINE,
             "griddash": "solid",
             "gridwidth": 1,
             "linecolor": theme.BASELINE,
-            "tickfont": {"size": 11, "color": theme.INK_MUTED},
+            "tickfont": {"size": 11, "color": theme.INK_SECONDARY},
             "zeroline": False,
         },
     )

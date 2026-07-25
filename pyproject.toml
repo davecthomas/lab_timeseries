@@ -2,7 +2,8 @@
 name = "lab-timeseries-grapher"
 version = "0.2.0"
 description = "Explore per-test lab time series with normal range bands from a cleaned labs CSV"
-requires-python = ">=3.10"
+# ai-api-unified requires >=3.11,<3.14
+requires-python = ">=3.11,<3.14"
 
 dependencies = [
     "pandas<2.3.3",
@@ -10,6 +11,9 @@ dependencies = [
     "python-dateutil>=2.9.0.post0",
     "plotly>=5.24.0",
     "dash>=2.17.0",
+    # AI commentary: unified client plus the native Anthropic provider extra
+    "ai-api-unified[anthropic]>=2.17.0",
+    "python-dotenv>=1.0.0",
 ]
 
 # CLI entry point used by `poetry run lab-timeseries-grapher`
@@ -23,12 +27,14 @@ description = "Explore per-test lab time series with normal range bands from a c
 packages = [{ include = "lab_timeseries_grapher", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = ">=3.11,<3.14"
 pandas = "<2.3.3"
 numpy = ">=1.26.0"
 python-dateutil = ">=2.9.0.post0"
 plotly = ">=5.24.0"
 dash = ">=2.17.0"
+ai-api-unified = { version = ">=2.17.0", extras = ["anthropic"] }
+python-dotenv = ">=1.0.0"
 
 # Mirror the CLI entry point for Poetry's script runner
 [tool.poetry.scripts]
