@@ -270,20 +270,36 @@ def make_figure(test_name: str, payload: Dict[str, object]) -> go.Figure:
     return fig
 
 
+def data_dir() -> Path:
+    """Return the project's /data directory."""
+    return Path(__file__).resolve().parents[2] / "data"
+
+
 def resolve_csv_path(csv_arg: str) -> Path:
     """
     Resolve the CSV path relative to the project /data directory.
 
-    Accepts an absolute path or a filename. Filenames are looked up under the
-    project's data directory.
+    Resolution order:
+      1. An absolute path that exists is used as-is.
+      2. A filename found under the project's /data directory is used.
+      3. If the named file is absent, fall back to the single CSV in /data
+         (the data files are gitignored, so their names vary per machine).
+
+    The returned path may not exist; the caller is expected to check.
     """
     raw = Path(csv_arg)
     if raw.is_absolute() and raw.exists():
         return raw
 
-    project_root = Path(__file__).resolve().parents[2]
-    data_dir = project_root / "data"
-    candidate = data_dir / raw.name
+    candidate = data_dir() / raw.name
+    if candidate.exists():
+        return candidate
+
+    csvs = sorted(data_dir().glob("*.csv"))
+    if len(csvs) == 1:
+        logger.info("Default CSV %s not found; using the only CSV in /data: %s", raw.name, csvs[0].name)
+        return csvs[0]
+
     return candidate
 
 
@@ -342,7 +358,9 @@ def main():
     csv_path = resolve_csv_path(args.csv)
     if not csv_path.exists():
         logger.error("CSV not found at resolved path %s", csv_path)
-        raise SystemExit(f"CSV not found at {csv_path}. Expected inside the /data directory.")
+        available = sorted(p.name for p in data_dir().glob("*.csv"))
+        hint = f" Available CSVs in /data: {', '.join(available)}." if available else " No CSVs found in /data."
+        raise SystemExit(f"CSV not found at {csv_path}. Expected inside the /data directory.{hint}")
 
     logger.info("Resolved CSV path: %s", csv_path)
 

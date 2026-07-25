@@ -1,16 +1,14 @@
-# Lab Time-Series Grapher
+# Lab Time-Series Explorer
 
-Generate per-test time-series charts (alphabetical) from a cleaned labs CSV, with a **green normal-range band** when available.
+An interactive [Dash](https://dash.plotly.com/) web app for exploring per-test lab time series from a cleaned labs CSV, with a **green normal-range band** shown when a range is available.
 
 ## Input
 
-Place your CSV in the same directory. By default the script loads:
+Put your CSV in the `data/` directory. The `data/` directory is **gitignored**, so your lab data never gets committed.
 
-- `blood_results_units_fixed.csv`
+By default the app loads `data/labs_results.csv`. If that name isn't present but `data/` contains exactly one CSV, the app uses that file automatically. Override the choice with `--csv YOUR_FILE.csv`.
 
-Override with `--csv YOUR_FILE.csv`.
-
-### Expected columns (from your cleaned file)
+### Expected columns
 
 - `Date` (ISO preferred, e.g., `YYYY-MM-DD`)
 - `Test Name`
@@ -19,42 +17,41 @@ Override with `--csv YOUR_FILE.csv`.
 - `Range_Low` (numeric or `n/a`)
 - `Range_High` (numeric or `n/a`)
 
-Other columns are ignored for plotting.
+Other columns are ignored.
 
 ## Install
 
-```bash
-# (optional) python -m venv .venv && source .venv/bin/activate
-pip install -r <(python - <<'PY'
-print("\\n".join([
-    "pandas>=2.2.0",
-    "matplotlib>=3.8.0",
-    "numpy>=1.26.0",
-    "python-dateutil>=2.9.0.post0",
-]))
-PY
-)
-```
-
-_(Or use `pyproject.toml` with your preferred tool.)_
-
-## Usage
+Dependencies are defined in `pyproject.toml`. Install with Poetry:
 
 ```bash
-python app.py --csv blood_results_units_fixed.csv --outdir plots --pdf all_tests.pdf
+poetry install
 ```
 
-Arguments:
+## Run
 
-- `--csv` : Path to input CSV (default: `blood_results_units_fixed.csv`)
-- `--outdir`: Output directory for PNGs (default: `plots`)
-- `--pdf` : (Optional) Path to a multi-page PDF combining all charts
+Start the web server:
+
+```bash
+poetry run lab-timeseries-grapher
+```
+
+Then open http://127.0.0.1:8050 in your browser.
+
+### Arguments
+
+- `--csv`: CSV filename (looked up in `data/`) or an absolute path. Default: `labs_results.csv`, with fallback to the only CSV in `data/`.
+- `--host`: Host interface for the web server (default: `127.0.0.1`)
+- `--port`: Port for the web server (default: `8050`)
+- `--debug`: Run Dash in debug mode with live reload
+- `--log-level`: Python logging level, e.g. `DEBUG`, `INFO`, `WARNING` (default: `INFO`, or `LAB_TS_LOG_LEVEL`)
+
+Run `poetry run lab-timeseries-grapher --help` to see every option.
 
 ## Notes
 
-- Tests are plotted **alphabetically**.
+- Tests are listed with the **most recently measured first**; the newest metrics are pre-selected on load.
 - The **normal range band** is shaded green when both `Range_Low` and `Range_High` are usable numbers.
 
-  - If multiple range pairs exist over time, the script chooses the **mode** (most frequent pair); if there’s no clear mode it falls back to **median** low/high across rows with numeric ranges.
+  - If multiple range pairs exist over time, the app chooses the **mode** (most frequent pair); with no clear mode it falls back to the **median** low/high across rows with numeric ranges.
 
-- Any row missing `Value_Numeric` or an unparseable `Date` is skipped for that chart (other rows still plot).
+- Any row missing `Value_Numeric` or with an unparseable `Date` is skipped for that chart (other rows still plot).
