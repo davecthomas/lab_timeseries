@@ -2,9 +2,12 @@ import pandas as pd
 
 from lab_timeseries_grapher.app import (
     ai_panel,
+    consent_denied,
+    consent_granted,
     create_app,
     filter_rows,
     merge_selection,
+    resolve_consent,
     resolve_selection,
     selection_order,
 )
@@ -105,6 +108,57 @@ class TestResolveSelection:
 
     def test_handles_none_stored(self):
         assert resolve_selection("select-all", None, ["A"], [], None) == ["A"]
+
+
+class TestConsentGate:
+    def test_first_click_opens_dialog_and_does_not_run(self):
+        show, store, runs = resolve_consent("ai-analyze", None, [], 0)
+        assert show is True
+        assert runs == 0
+        assert store is None
+
+    def test_yes_runs_once_without_remembering(self):
+        show, store, runs = resolve_consent("consent-yes", None, [], 0)
+        assert (show, runs) == (False, 1)
+        assert store is None  # asked again next time
+
+    def test_yes_with_remember_is_persisted(self):
+        _, store, runs = resolve_consent("consent-yes", None, ["on"], 0)
+        assert store == {"decision": "granted"}
+        assert runs == 1
+
+    def test_remembered_yes_skips_the_dialog(self):
+        show, _, runs = resolve_consent("ai-analyze", {"decision": "granted"}, [], 4)
+        assert (show, runs) == (False, 5)
+
+    def test_no_cancels_without_running(self):
+        show, store, runs = resolve_consent("consent-no", None, [], 2)
+        assert (show, runs) == (False, 2)
+        assert store is None
+
+    def test_no_with_remember_records_denial(self):
+        _, store, runs = resolve_consent("consent-no", None, ["on"], 2)
+        assert store == {"decision": "denied"}
+        assert runs == 2
+
+    def test_denied_never_reopens_or_runs(self):
+        show, _, runs = resolve_consent("ai-analyze", {"decision": "denied"}, [], 3)
+        assert (show, runs) == (False, 3)
+
+    def test_unknown_trigger_is_inert(self):
+        assert resolve_consent(None, None, [], 7) == (False, None, 7)
+
+
+class TestConsentPredicates:
+    def test_granted(self):
+        assert consent_granted({"decision": "granted"}) is True
+        assert consent_granted({"decision": "denied"}) is False
+        assert consent_granted(None) is False
+
+    def test_denied(self):
+        assert consent_denied({"decision": "denied"}) is True
+        assert consent_denied({"decision": "granted"}) is False
+        assert consent_denied(None) is False
 
 
 class TestAiPanel:

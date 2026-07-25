@@ -235,6 +235,67 @@ body {
 .ai-panel ul { margin: 0 0 0.6rem; padding-left: 1.2rem; }
 .ai-panel strong { color: #ffffff; }
 .ai-panel.ai-error { border-left-color: #d03b3b; }
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.65);
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+.modal-card {
+    background: #1a1a19;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 1.5rem 1.6rem 1.25rem;
+    max-width: 30rem;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+.modal-card h2 {
+    margin: 0 0 0.7rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+.modal-card p {
+    margin: 0 0 0.7rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #c3c2b7;
+}
+.modal-card .modal-note { color: #898781; font-size: 0.8rem; }
+.modal-card strong { color: #ffffff; }
+.modal-remember label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: #c3c2b7;
+    cursor: pointer;
+    margin: 0.9rem 0 1.1rem;
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+.modal-button {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.45rem 1.2rem;
+    cursor: pointer;
+}
+.modal-button:hover { background: rgba(255, 255, 255, 0.08); }
+.modal-button-primary {
+    border-color: #3987e5;
+    background: rgba(57, 135, 229, 0.22);
+}
+.modal-button-primary:hover { background: rgba(57, 135, 229, 0.36); }
 .graphs-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));

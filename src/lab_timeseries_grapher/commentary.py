@@ -122,6 +122,25 @@ def is_configured() -> bool:
     return bool(os.getenv("ANTHROPIC_API_KEY", "").strip())
 
 
+def configured_model_name() -> str:
+    """Name of the model the commentary would call, for the consent prompt.
+
+    Prefers the env override, else the provider's own default. Falls back to a
+    generic label when the provider package cannot be inspected.
+    """
+    load_env()
+    model = os.getenv("COMPLETIONS_MODEL_NAME", "").strip()
+    if model:
+        return model
+    try:
+        from ai_api_unified.completions.ai_anthropic_completions import AiAnthropicCompletions
+
+        return str(AiAnthropicCompletions.DEFAULT_COMPLETIONS_MODEL)
+    except Exception:  # pragma: no cover - provider package unavailable
+        logger.warning("Could not read the provider default model name", exc_info=True)
+        return "the configured Claude model"
+
+
 def _completions_client():
     """Build the Claude completions client from ai-api-unified."""
     from ai_api_unified.ai_factory import AIFactory

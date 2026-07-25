@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from dash import Dash, Input, Output, State, ctx, dcc, html
+from dash import Dash, Input, Output, State, ctx, dcc, html, no_update
 
 from . import theme
 from .commentary import CommentaryError, generate_commentary
@@ -62,6 +62,53 @@ def selection_order(stored: list[str], visible_rows: list[dict] | None) -> list[
     visible = [r["id"] for r in visible_rows or [] if r.get("id") in stored_set]
     visible_set = set(visible)
     return visible + [i for i in stored if i not in visible_set]
+
+
+GRANTED = "granted"
+DENIED = "denied"
+
+
+def consent_granted(store: dict | None) -> bool:
+    """True when the user has agreed and asked not to be asked again."""
+    return bool(store) and store.get("decision") == GRANTED
+
+
+def consent_denied(store: dict | None) -> bool:
+    """True when the user has declined and asked not to be asked again."""
+    return bool(store) and store.get("decision") == DENIED
+
+
+def resolve_consent(
+    trigger: str | None,
+    store: dict | None,
+    remember: list[str] | None,
+    runs: int | None,
+) -> tuple[bool, dict | None, int]:
+    """Decide what the consent gate does next.
+
+    Returns (show_dialog, next_store, next_run_count). The run count is a
+    counter the analysis callback listens on: bumping it starts a run.
+
+    A decision is persisted only when "don't ask again" is ticked, so an
+    un-ticked answer applies to this click alone.
+    """
+    runs = runs or 0
+    keep = bool(remember)
+
+    if trigger == "ai-analyze":
+        if consent_granted(store):
+            return False, store, runs + 1
+        if consent_denied(store):
+            return False, store, runs
+        return True, store, runs
+
+    if trigger == "consent-yes":
+        return False, {"decision": GRANTED} if keep else store, runs + 1
+
+    if trigger == "consent-no":
+        return False, {"decision": DENIED} if keep else store, runs
+
+    return False, store, runs
 
 
 def resolve_selection(
@@ -154,14 +201,46 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
         return rendered
 
     @app.callback(
-        Output("ai-commentary", "children"),
+        Output("ai-consent-modal", "style"),
+        Output("ai-consent-store", "data"),
+        Output("ai-run-count", "data"),
         Input("ai-analyze", "n_clicks"),
+        Input("consent-yes", "n_clicks"),
+        Input("consent-no", "n_clicks"),
+        State("consent-remember", "value"),
+        State("ai-consent-store", "data"),
+        State("ai-run-count", "data"),
+        prevent_initial_call=True,
+    )
+    def consent_gate(_analyze, _yes, _no, remember, store, runs):
+        show, next_store, next_runs = resolve_consent(ctx.triggered_id, store, remember, runs)
+        # Only write the counter when a run should start; writing an unchanged
+        # value could still wake the analysis callback.
+        runs_out = next_runs if next_runs != (runs or 0) else no_update
+        return {"display": "flex" if show else "none"}, next_store, runs_out
+
+    @app.callback(
+        Output("ai-analyze", "disabled"),
+        Output("ai-analyze", "title"),
+        Input("ai-consent-store", "data"),
+    )
+    def gate_button(store):
+        if consent_denied(store):
+            return True, (
+                "You chose not to share lab data with the AI. Clear this site's "
+                "storage to re-enable."
+            )
+        return False, "Send the selected metrics to the AI for commentary"
+
+    @app.callback(
+        Output("ai-commentary", "children"),
+        Input("ai-run-count", "data"),
         State("selection-store", "data"),
         State("metric-table", "derived_virtual_data"),
         State("date-window", "value"),
         prevent_initial_call=True,
     )
-    def analyze_with_ai(_clicks, stored, visible_rows, window):
+    def analyze_with_ai(_runs, stored, visible_rows, window):
         if not stored:
             return ai_panel("Select at least one metric, then run the analysis.", error=True)
 

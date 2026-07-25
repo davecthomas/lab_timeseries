@@ -10,7 +10,7 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
 - Chart selection survives filtering; hidden selections stay charted
-- **Analysis with AI** — commentary on the selected metrics from Claude (see below)
+- **Analysis with AI** — commentary on the selected metrics from Claude, behind a first-run consent prompt (see below)
 
 ## Input
 
@@ -38,7 +38,18 @@ Other columns are ignored.
 
 Select one or more metrics and press **✦ Analysis with AI**. The app sends those metrics — values, dates, units, and reference ranges — to Claude and renders the reply above the charts: a summary, out-of-range results, trends, and questions worth taking to a doctor.
 
-**This sends the selected lab values to Anthropic's API.** Nothing is sent until you press the button, and only the metrics you selected go.
+**This sends the selected lab values to Anthropic's API.** The first time you press the button, the app names the configured model and asks whether to share your health data. Nothing leaves your machine until you agree, and only the metrics you selected go.
+
+The dialog offers **Don't ask again**:
+
+| Answer | Don't ask again | Result |
+|---|---|---|
+| Yes | unticked | Runs once; asks again next time |
+| Yes | ticked | Runs, and stops asking |
+| No | unticked | Cancels; asks again next time |
+| No | ticked | Cancels and disables the button |
+
+The choice is stored in your browser, so it survives reloads. To undo a remembered answer — including a disabled button — clear this site's storage in your browser.
 
 ### Setup
 

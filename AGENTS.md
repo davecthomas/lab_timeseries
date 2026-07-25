@@ -29,6 +29,7 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 - Selection state is tracked by metric id in `dcc.Store("selection-store")`; DataTable row indices re-map when filters change the row set. One callback owns table data + selection, since split ownership makes the two chase each other
 - Chart colors come from `theme.py` tokens (validated dark palette); out-of-range status always pairs color with a shape/text glyph (▲/▼)
 - AI calls go through `ai-api-unified` (`AIFactory.get_ai_completions_client`), never a provider SDK directly; Claude is the only engine wired up. Secrets come from a gitignored `.env` (see `.env.example`)
+- Lab values reach the network only after the consent dialog; the analysis callback listens on the `ai-run-count` store, which only the consent gate writes. Keep that ordering — do not wire an analysis trigger straight to a button
 - Prompt text lives in `skills/*/SKILL.md`, never inline in Python, and is never shown to the end user
 - Ruff rule set is pinned in `pyproject.toml` (`E4,E7,E9,F,UP,C4,I`, line length 100)
 
