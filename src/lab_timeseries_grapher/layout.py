@@ -6,6 +6,7 @@ import pandas as pd
 from dash import dash_table, dcc, html
 
 from . import theme
+from .commentary import configured_model_name
 from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
 from .figures import make_figure
 
@@ -174,6 +175,51 @@ def metric_table(table_rows: list[dict], initial_selection: list[str]) -> dash_t
     )
 
 
+def consent_dialog(model_name: str) -> html.Div:
+    """First-run confirmation before any lab values leave the machine."""
+    return html.Div(
+        id="ai-consent-modal",
+        className="modal-backdrop",
+        style={"display": "none"},
+        children=html.Div(
+            className="modal-card",
+            children=[
+                html.H2("Share your health data?"),
+                html.P(
+                    [
+                        "The selected lab results — values, dates, and reference "
+                        "ranges — will be sent to ",
+                        html.Strong(model_name),
+                        " to generate the commentary.",
+                    ]
+                ),
+                html.P(
+                    "Nothing is sent until you agree, and only the metrics you selected go.",
+                    className="modal-note",
+                ),
+                dcc.Checklist(
+                    id="consent-remember",
+                    className="modal-remember",
+                    options=[{"label": "Don't ask again", "value": "on"}],
+                    value=[],
+                ),
+                html.Div(
+                    className="modal-actions",
+                    children=[
+                        html.Button("No", id="consent-no", className="modal-button", n_clicks=0),
+                        html.Button(
+                            "Yes, send",
+                            id="consent-yes",
+                            className="modal-button modal-button-primary",
+                            n_clicks=0,
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
 def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> html.Div:
     panels = sorted({r["panel"] for r in table_rows if r["panel"]})
     initial_selection = [r["id"] for r in table_rows[:INITIAL_METRIC_COUNT]] or [
@@ -214,6 +260,16 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                     value=[],
                 ),
             ),
+            html.Div(
+                className="selection-actions",
+                children=[
+                    html.Button("Select all", id="select-all", className="link-button", n_clicks=0),
+                    html.Button(
+                        "Clear all", id="clear-all", className="link-button", n_clicks=0
+                    ),
+                    html.Span(id="selection-count", className="selection-count"),
+                ],
+            ),
             metric_table(table_rows, initial_selection),
         ],
     )
@@ -222,6 +278,9 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
         className="content-area",
         children=[
             dcc.Store(id="selection-store", data=initial_selection),
+            # Consent outlives the tab; the run counter is per-session.
+            dcc.Store(id="ai-consent-store", storage_type="local"),
+            dcc.Store(id="ai-run-count", data=0),
             html.Div(
                 className="filter-row",
                 children=[
@@ -233,7 +292,19 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                         value="all",
                         inline=True,
                     ),
+                    html.Button(
+                        [html.Span("✦", className="ai-icon"), "Analysis with AI"],
+                        id="ai-analyze",
+                        className="ai-button",
+                        n_clicks=0,
+                    ),
                 ],
+            ),
+            dcc.Loading(
+                id="ai-loading",
+                type="dot",
+                color=theme.SERIES,
+                children=html.Div(id="ai-commentary"),
             ),
             html.Div(
                 id="graphs-container",
@@ -258,5 +329,6 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                 ],
             ),
             html.Div(className="app-shell", children=[sidebar, content]),
+            consent_dialog(configured_model_name()),
         ]
     )

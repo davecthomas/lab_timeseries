@@ -18,6 +18,11 @@ GRIDLINE = "#2c2c2a"
 BASELINE = "#383835"
 BORDER = "rgba(255, 255, 255, 0.10)"
 
+# Hover tooltips: raised surface with white ink. Plotly picks its own label
+# colors otherwise, which lands dark-on-dark against this theme.
+TOOLTIP_BG = "#33322f"
+TOOLTIP_INK = "#ffffff"
+
 # Data colors (validated against the dark surface)
 SERIES = "#3987e5"  # categorical slot 1, dark step
 STATUS_GOOD = "#0ca30c"
@@ -43,6 +48,10 @@ body {
     gap: 1.5rem 2.5rem;
     padding: 1.25rem 2rem;
     border-bottom: 1px solid #2c2c2a;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #0d0d0d;
 }
 .app-header h1 {
     font-size: 1.15rem;
@@ -85,6 +94,7 @@ body {
 }
 .app-shell {
     display: flex;
+    align-items: flex-start;
     min-height: calc(100vh - 4.5rem);
 }
 .sidebar {
@@ -95,6 +105,33 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+    position: sticky;
+    top: 6.5rem;
+    max-height: calc(100vh - 6.5rem);
+    overflow-y: auto;
+}
+.selection-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: #3987e5;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.link-button:hover { color: #ffffff; }
+.selection-count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: #898781;
+    font-variant-numeric: tabular-nums;
 }
 .sidebar .control-label {
     font-size: 0.7rem;
@@ -157,6 +194,108 @@ body {
     color: #ffffff;
     background: rgba(57, 135, 229, 0.15);
 }
+.ai-button {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid rgba(57, 135, 229, 0.55);
+    border-radius: 999px;
+    background: rgba(57, 135, 229, 0.12);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+}
+.ai-button:hover { background: rgba(57, 135, 229, 0.24); }
+.ai-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-icon { color: #3987e5; font-size: 0.95rem; line-height: 1; }
+.ai-panel {
+    background: #1a1a19;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-left: 3px solid #3987e5;
+    border-radius: 12px;
+    padding: 1.1rem 1.35rem;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    color: #c3c2b7;
+}
+.ai-panel .ai-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    color: #898781;
+    margin-bottom: 0.6rem;
+}
+.ai-panel h2 { font-size: 1rem; color: #ffffff; margin: 1rem 0 0.4rem; }
+.ai-panel h3 { font-size: 0.9rem; color: #ffffff; margin: 0.9rem 0 0.3rem; }
+.ai-panel p { margin: 0 0 0.6rem; }
+.ai-panel ul { margin: 0 0 0.6rem; padding-left: 1.2rem; }
+.ai-panel strong { color: #ffffff; }
+.ai-panel.ai-error { border-left-color: #d03b3b; }
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.65);
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+.modal-card {
+    background: #1a1a19;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 1.5rem 1.6rem 1.25rem;
+    max-width: 30rem;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+.modal-card h2 {
+    margin: 0 0 0.7rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+.modal-card p {
+    margin: 0 0 0.7rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #c3c2b7;
+}
+.modal-card .modal-note { color: #898781; font-size: 0.8rem; }
+.modal-card strong { color: #ffffff; }
+.modal-remember label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: #c3c2b7;
+    cursor: pointer;
+    margin: 0.9rem 0 1.1rem;
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+.modal-button {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.45rem 1.2rem;
+    cursor: pointer;
+}
+.modal-button:hover { background: rgba(255, 255, 255, 0.08); }
+.modal-button-primary {
+    border-color: #3987e5;
+    background: rgba(57, 135, 229, 0.22);
+}
+.modal-button-primary:hover { background: rgba(57, 135, 229, 0.36); }
 .graphs-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
@@ -202,6 +341,13 @@ body {
 """
 
 
+# AI commentary is model-generated markdown. Images are the one element that
+# would fetch a remote URL on render, so pin them to local/inline sources; a
+# crafted result string cannot turn a chart into a beacon. Scoped to img-src
+# only, since Dash and Plotly need inline scripts and styles.
+CSP_IMG = "img-src 'self' data: blob:;"
+
+
 def index_string() -> str:
     """Dash index template with the theme's inline stylesheet."""
     return (
@@ -209,6 +355,7 @@ def index_string() -> str:
         "<html>"
         "<head>"
         "{%metas%}"
+        f'<meta http-equiv="Content-Security-Policy" content="{CSP_IMG}">'
         "<title>{%title%}</title>"
         "{%favicon%}"
         "{%css%}"

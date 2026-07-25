@@ -1,7 +1,7 @@
 import pandas as pd
 
 from lab_timeseries_grapher.data import MetricSeries
-from lab_timeseries_grapher.figures import filter_window, make_figure
+from lab_timeseries_grapher.figures import filter_window, label_with_units, make_figure
 
 
 def make_series(values, band=(2.0, 8.0)):
@@ -25,6 +25,20 @@ class TestFilterWindow:
     def test_cutoff_drops_older_points(self):
         s = make_series([1.0, 2.0, 3.0])
         assert filter_window(s, pd.Timestamp("2023-02-15")) == [2]
+
+
+class TestLabelWithUnits:
+    def test_appends_units_to_bare_number(self):
+        assert label_with_units("4.6", "g/dL") == "4.6 g/dL"
+
+    def test_does_not_double_units_already_present(self):
+        assert label_with_units("4.6 g/dL", "g/dL") == "4.6 g/dL"
+
+    def test_case_insensitive_match(self):
+        assert label_with_units("12 MG/DL", "mg/dL") == "12 MG/DL"
+
+    def test_no_units_returns_display(self):
+        assert label_with_units("4.6", "") == "4.6"
 
 
 class TestMakeFigure:
@@ -52,6 +66,17 @@ class TestMakeFigure:
     def test_units_on_y_axis(self):
         fig = make_figure(make_series([5.0]))
         assert fig.layout.yaxis.title.text == "mg/dL"
+
+    def test_hover_label_carries_units_once(self):
+        series = make_series([5.0])
+        series.display_values = ["5.0 mg/dL"]
+        fig = make_figure(series)
+        assert list(fig.data[0].customdata) == ["5.0 mg/dL"]
+
+    def test_hover_tooltip_is_high_contrast(self):
+        fig = make_figure(make_series([5.0]))
+        assert fig.layout.hoverlabel.font.color == "#ffffff"
+        assert fig.layout.hoverlabel.bgcolor == "#33322f"
 
     def test_cutoff_filters_points(self):
         fig = make_figure(make_series([1.0, 5.0, 9.0]), cutoff=pd.Timestamp("2023-02-15"))

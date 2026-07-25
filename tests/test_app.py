@@ -1,6 +1,16 @@
 import pandas as pd
 
-from lab_timeseries_grapher.app import create_app, filter_rows, merge_selection, selection_order
+from lab_timeseries_grapher.app import (
+    ai_panel,
+    consent_denied,
+    consent_granted,
+    create_app,
+    filter_rows,
+    merge_selection,
+    resolve_consent,
+    resolve_selection,
+    selection_order,
+)
 from lab_timeseries_grapher.data import MetricSeries
 from lab_timeseries_grapher.layout import build_table_rows, window_cutoff
 
@@ -75,6 +85,93 @@ class TestMergeSelection:
         assert merge_selection(None, ["A"], None) == []
 
 
+class TestResolveSelection:
+    def test_select_all_adds_every_listed_row(self):
+        out = resolve_selection("select-all", ["A"], ["A", "B", "C"], ["A", "B", "C"], ["A"])
+        assert out == ["A", "B", "C"]
+
+    def test_select_all_respects_filtered_list_and_keeps_hidden(self):
+        out = resolve_selection("select-all", ["Z"], ["A", "B"], ["A", "B"], [])
+        assert out == ["Z", "A", "B"]
+
+    def test_clear_all_empties_including_hidden(self):
+        out = resolve_selection("clear-all", ["A", "Z"], ["A"], ["A"], ["A"])
+        assert out == []
+
+    def test_checkbox_change_merges_visible_selection(self):
+        out = resolve_selection("metric-table", ["A", "Z"], ["A", "B"], ["A", "B"], ["B"])
+        assert out == ["Z", "B"]
+
+    def test_filter_change_leaves_selection_untouched(self):
+        out = resolve_selection("metric-search", ["A", "Z"], ["A"], ["A", "Z"], ["A"])
+        assert out == ["A", "Z"]
+
+    def test_handles_none_stored(self):
+        assert resolve_selection("select-all", None, ["A"], [], None) == ["A"]
+
+
+class TestConsentGate:
+    def test_first_click_opens_dialog_and_does_not_run(self):
+        show, store, runs = resolve_consent("ai-analyze", None, [], 0)
+        assert show is True
+        assert runs == 0
+        assert store is None
+
+    def test_yes_runs_once_without_remembering(self):
+        show, store, runs = resolve_consent("consent-yes", None, [], 0)
+        assert (show, runs) == (False, 1)
+        assert store is None  # asked again next time
+
+    def test_yes_with_remember_is_persisted(self):
+        _, store, runs = resolve_consent("consent-yes", None, ["on"], 0)
+        assert store == {"decision": "granted"}
+        assert runs == 1
+
+    def test_remembered_yes_skips_the_dialog(self):
+        show, _, runs = resolve_consent("ai-analyze", {"decision": "granted"}, [], 4)
+        assert (show, runs) == (False, 5)
+
+    def test_no_cancels_without_running(self):
+        show, store, runs = resolve_consent("consent-no", None, [], 2)
+        assert (show, runs) == (False, 2)
+        assert store is None
+
+    def test_no_with_remember_records_denial(self):
+        _, store, runs = resolve_consent("consent-no", None, ["on"], 2)
+        assert store == {"decision": "denied"}
+        assert runs == 2
+
+    def test_denied_never_reopens_or_runs(self):
+        show, _, runs = resolve_consent("ai-analyze", {"decision": "denied"}, [], 3)
+        assert (show, runs) == (False, 3)
+
+    def test_unknown_trigger_is_inert(self):
+        assert resolve_consent(None, None, [], 7) == (False, None, 7)
+
+
+class TestConsentPredicates:
+    def test_granted(self):
+        assert consent_granted({"decision": "granted"}) is True
+        assert consent_granted({"decision": "denied"}) is False
+        assert consent_granted(None) is False
+
+    def test_denied(self):
+        assert consent_denied({"decision": "denied"}) is True
+        assert consent_denied({"decision": "granted"}) is False
+        assert consent_denied(None) is False
+
+
+class TestAiPanel:
+    def test_error_panel_marked(self):
+        panel = ai_panel("boom", error=True)
+        assert "ai-error" in panel.className
+
+    def test_success_panel_reports_count(self):
+        panel = ai_panel("## Summary", count=3)
+        assert "ai-error" not in panel.className
+        assert "3 metric(s)" in panel.children[0].children[1]
+
+
 class TestSelectionOrder:
     def test_visible_table_order_first(self):
         rows = [{"id": "C"}, {"id": "A"}]
@@ -98,3 +195,8 @@ class TestCreateApp:
         app = create_app(sample_metrics())
         assert app.title == "Blood Metrics"
         assert app.layout is not None
+
+    def test_index_restricts_image_sources(self):
+        app = create_app(sample_metrics())
+        assert "Content-Security-Policy" in app.index_string
+        assert "img-src 'self' data: blob:;" in app.index_string
