@@ -43,8 +43,15 @@ class TestSkillPrompt:
     def test_skill_file_exists(self):
         assert skill_path().is_file()
 
+    def test_edits_take_effect_without_restart(self, tmp_path, monkeypatch):
+        edited = tmp_path / "SKILL.md"
+        edited.write_text("---\nname: x\n---\nFirst wording")
+        monkeypatch.setattr(commentary, "skill_path", lambda: edited)
+        assert load_skill_prompt() == "First wording"
+        edited.write_text("---\nname: x\n---\nSecond wording")
+        assert load_skill_prompt() == "Second wording"
+
     def test_prompt_has_no_frontmatter_and_names_the_role(self):
-        load_skill_prompt.cache_clear()
         prompt = load_skill_prompt()
         assert not prompt.startswith("---")
         assert "Bloodwork Analysis Helper" in prompt

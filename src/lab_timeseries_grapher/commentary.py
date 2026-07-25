@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 import os
-from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -49,9 +48,12 @@ def strip_frontmatter(text: str) -> str:
     return parts[2].strip() if len(parts) == 3 else text.strip()
 
 
-@lru_cache(maxsize=1)
 def load_skill_prompt() -> str:
-    """Read the bloodwork-analysis-helper skill body as the system prompt."""
+    """Read the bloodwork-analysis-helper skill body as the system prompt.
+
+    Read per request, not cached: editing SKILL.md is the documented way to
+    change the commentary, and it should take effect without a restart.
+    """
     path = skill_path()
     try:
         raw = path.read_text(encoding="utf-8")
