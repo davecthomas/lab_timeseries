@@ -6,6 +6,7 @@ import pandas as pd
 from dash import dash_table, dcc, html
 
 from . import theme
+from .analyses import window_label
 from .commentary import configured_model_name
 from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
 from .figures import make_figure
@@ -175,6 +176,122 @@ def metric_table(table_rows: list[dict], initial_selection: list[str]) -> dash_t
     )
 
 
+def ai_pane() -> html.Aside:
+    """Right-hand pane: index of session analyses over the active one."""
+    return html.Aside(
+        id="ai-pane",
+        className="ai-pane",
+        style={"display": "none"},
+        children=[
+            html.Div(
+                className="ai-pane-head",
+                children=[
+                    html.Span("✦", className="ai-icon"),
+                    html.Span("AI analysis", className="ai-pane-title"),
+                    html.Button(
+                        "Export all",
+                        id="ai-export",
+                        className="link-button ai-pane-action",
+                        n_clicks=0,
+                        title="Download every analysis in this session as markdown",
+                    ),
+                    html.Button(
+                        "✕",
+                        id="ai-close",
+                        className="icon-button",
+                        n_clicks=0,
+                        title="Close the analysis pane",
+                    ),
+                ],
+            ),
+            html.Div(id="ai-index", className="ai-index"),
+            # The request can run for tens of seconds; without this the pane
+            # looks idle and invites clicks mid-flight.
+            dcc.Loading(
+                id="ai-loading",
+                type="dot",
+                color=theme.SERIES,
+                children=html.Div(id="ai-pane-body", className="ai-pane-body"),
+            ),
+        ],
+    )
+
+
+def index_row(entry: dict, active_id: str | None, current_key: str | None) -> html.Div:
+    """One row in the analyses index."""
+    classes = ["ai-index-row"]
+    if entry["id"] == active_id:
+        classes.append("is-active")
+    tags = [f"{entry['count']} metric(s)", window_label(entry.get("window")), entry.get("created", "")]
+    if current_key is not None and entry.get("key") == current_key:
+        tags.append("current selection")
+    return html.Div(
+        className=" ".join(classes),
+        children=html.Button(
+            id={"type": "ai-index-item", "index": entry["id"]},
+            className="ai-index-button",
+            n_clicks=0,
+            children=[
+                html.Span(entry["label"], className="ai-index-label"),
+                html.Span(" · ".join(t for t in tags if t), className="ai-index-meta"),
+            ],
+        ),
+    )
+
+
+def render_index(
+    entries: list[dict] | None, active_id: str | None, current_key: str | None
+) -> list:
+    """The index list, newest analysis first."""
+    entries = entries or []
+    if not entries:
+        return []
+    return [
+        html.Div("This session", className="ai-index-heading"),
+        *[index_row(e, active_id, current_key) for e in entries],
+    ]
+
+
+def render_analysis(entry: dict | None) -> list:
+    """The active analysis body, with a copy control."""
+    if entry is None:
+        return [
+            html.P(
+                "Select an analysis from the list, or run a new one.",
+                className="empty-note",
+            )
+        ]
+    return [
+        html.Div(
+            className="ai-body-head",
+            children=[
+                html.Span(entry["label"], className="ai-body-title"),
+                dcc.Clipboard(
+                    target_id="ai-body-text",
+                    className="copy-button",
+                    title="Copy this analysis",
+                ),
+            ],
+        ),
+        html.Div(
+            id="ai-body-text",
+            className="ai-body-text",
+            children=dcc.Markdown(entry.get("text", "")),
+        ),
+    ]
+
+
+def ai_error(message: str) -> list:
+    """Error state shown inside the pane body."""
+    return [
+        html.Div(
+            className="ai-body-head",
+            children=html.Span("Analysis unavailable", className="ai-body-title is-error"),
+        ),
+        html.P(message, className="empty-note"),
+    ]
+
+
 def consent_dialog(model_name: str) -> html.Div:
     """First-run confirmation before any lab values leave the machine."""
     return html.Div(
@@ -278,9 +395,15 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
         className="content-area",
         children=[
             dcc.Store(id="selection-store", data=initial_selection),
-            # Consent outlives the tab; the run counter is per-session.
+            # Consent outlives the tab; analyses last the session; the run
+            # counter is per-page.
             dcc.Store(id="ai-consent-store", storage_type="local"),
+            dcc.Store(id="ai-analyses", storage_type="session", data=[]),
+            dcc.Store(id="ai-active", storage_type="session"),
+            dcc.Store(id="ai-visible", storage_type="session", data=False),
             dcc.Store(id="ai-run-count", data=0),
+            dcc.Store(id="ai-last-run", data=0),
+            dcc.Download(id="ai-download"),
             html.Div(
                 className="filter-row",
                 children=[
@@ -300,16 +423,17 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                     ),
                 ],
             ),
-            dcc.Loading(
-                id="ai-loading",
-                type="dot",
-                color=theme.SERIES,
-                children=html.Div(id="ai-commentary"),
-            ),
             html.Div(
-                id="graphs-container",
-                className="graphs-grid",
-                children=render_graphs(metrics, initial_selection, None),
+                id="split-pane",
+                className="split-pane",
+                children=[
+                    html.Div(
+                        id="graphs-container",
+                        className="graphs-grid",
+                        children=render_graphs(metrics, initial_selection, None),
+                    ),
+                    ai_pane(),
+                ],
             ),
         ],
     )

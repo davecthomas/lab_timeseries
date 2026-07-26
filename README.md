@@ -36,7 +36,16 @@ Other columns are ignored.
 
 ## AI commentary
 
-Select one or more metrics and press **✦ Analysis with AI**. The app sends those metrics — values, dates, units, and reference ranges — to Claude and renders the reply above the charts: a summary, out-of-range results, trends, and questions worth taking to a doctor.
+Select one or more metrics and press **✦ Analysis with AI**. The app sends those metrics — values, dates, units, and reference ranges — to Claude and opens a pane beside the charts: a summary, out-of-range results, trends, and questions worth taking to a doctor.
+
+### The analysis pane
+
+The pane splits the view — charts on the left, commentary on the right — and stays in place while the charts scroll, so you can read the commentary against the data it describes. Close it with **✕** and the charts return to full width.
+
+Every analysis you run is kept for the browser session and listed in the pane's index, so you can run several and move between them. Each is tied to the exact metrics and date window that produced it: change the selection and the pane steps aside rather than showing commentary about different tests. Return to that selection and the button reads **Show analysis**, revealing the held one instead of spending another request.
+
+- **Copy** — the icon beside the title copies that analysis.
+- **Export all** — downloads every analysis from the session as one markdown file.
 
 **This sends the selected lab values to Anthropic's API.** The first time you press the button, the app names the configured model and asks whether to share your health data. Nothing leaves your machine until you agree, and only the metrics you selected go.
 
@@ -106,6 +115,7 @@ Code layout (`src/lab_timeseries_grapher/`):
 | `layout.py` | Dash layout: header tiles, sidebar, chart cards |
 | `theme.py` | Color tokens and page CSS |
 | `commentary.py` | Prompt assembly and the Claude call for AI commentary |
+| `analyses.py` | Session-held analyses: identity by selection, index, markdown export |
 | `app.py` | App factory and callbacks |
 | `cli.py` | Command-line entry point |
 

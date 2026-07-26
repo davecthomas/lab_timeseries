@@ -9,13 +9,25 @@ charts) to whichever rows land on those indices.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from typing import NamedTuple
 
-from dash import Dash, Input, Output, State, ctx, dcc, html, no_update
+from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
-from . import theme
+from . import analyses, theme
 from .commentary import CommentaryError, generate_commentary
 from .data import STATUS_HIGH, STATUS_LOW, MetricSeries
-from .layout import build_layout, build_table_rows, render_graphs, window_cutoff
+from .layout import (
+    ai_error as ai_error_body,
+)
+from .layout import (
+    build_layout,
+    build_table_rows,
+    render_analysis,
+    render_graphs,
+    render_index,
+    window_cutoff,
+)
 
 logger = logging.getLogger("lab_timeseries_grapher")
 
@@ -109,6 +121,132 @@ def resolve_consent(
         return False, {"decision": DENIED} if keep else store, runs
 
     return False, store, runs
+
+
+RUN_PROP = "ai-run-count.data"
+ANALYZE_PROP = "ai-analyze.n_clicks"
+RUN_TRIGGERS = {RUN_PROP, ANALYZE_PROP}
+
+
+def is_run_request(
+    runs: int | None, last_run: int | None, changed_props: object = ()
+) -> bool:
+    """True when the consent gate authorized a fresh run on this invocation.
+
+    Both conditions are required, and each covers a distinct failure:
+
+    - **The run prop must have changed.** `ai-run-count` is written only by
+      the consent gate. `ai-last-run` advances only when this callback
+      *returns*, so during a pending request the client holds `runs = N`
+      against `last_run = N - 1`. Any invocation in that window — a close, an
+      index click, or a second analyze click while the dialog is open — would
+      otherwise spend that gap on an unconsented request.
+    - **The counter must have advanced.** `ctx.triggered_id` reports only the
+      first trigger of a coalesced chain, so the prop check reads
+      `ctx.triggered_prop_ids`, which lists them all; the counter comparison
+      then guards against replaying a value already handled.
+    """
+    props = set(changed_props or ())
+    advanced = (runs or 0) > (last_run or 0)
+    if RUN_PROP not in props:
+        if ANALYZE_PROP in props and advanced:
+            # Would mean Dash coalesced the chain without reporting the run
+            # prop, which is the case the prop check assumes cannot happen.
+            # Refusing is the safe default; this line names the reason.
+            logger.warning(
+                "Analyze click carried no %s among %s; refusing to run without it",
+                RUN_PROP,
+                sorted(props),
+            )
+        return False
+    return advanced
+
+
+class PaneState(NamedTuple):
+    entries: list[dict]
+    active: str | None
+    visible: bool
+    last_run: int
+    error: str | None = None
+
+
+def pane_update(
+    *,
+    trigger: object,
+    changed_props: object,
+    runs: int | None,
+    last_run: int | None,
+    ordered: list[str],
+    window: str | None,
+    entries: list[dict],
+    active: str | None,
+    visible: bool,
+    run_analysis,
+    now,
+) -> PaneState:
+    """Next pane state for one callback invocation.
+
+    Pure apart from `run_analysis`, which is injected so the decision — above
+    all, *whether to call the provider at all* — can be exercised without a
+    Dash context or a network call.
+    """
+    runs, last_run = runs or 0, last_run or 0
+    entries = list(entries or [])
+
+    if not is_run_request(runs, last_run, changed_props):
+        active, visible = resolve_pane_view(
+            trigger, entries, analyses.selection_key(ordered, window) if ordered else None,
+            active, visible,
+        )
+        return PaneState(entries, active, visible, last_run)
+
+    if not ordered:
+        return PaneState(
+            entries, active, True, runs, "Select at least one metric, then run the analysis."
+        )
+
+    try:
+        text = run_analysis(ordered, window)
+    except CommentaryError as exc:
+        return PaneState(entries, active, True, runs, str(exc))
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Unexpected error generating AI commentary")
+        return PaneState(entries, active, True, runs, "Something went wrong generating the analysis.")
+
+    entry = analyses.make_analysis(ordered, window, text, now())
+    return PaneState(analyses.upsert(entries, entry), entry["id"], True, runs)
+
+
+def resolve_pane_view(
+    trigger: object,
+    entries: list[dict],
+    current_key: str | None,
+    active: str | None,
+    visible: bool,
+) -> tuple[str | None, bool]:
+    """Which analysis the pane shows, and whether it is open, after a
+    non-run interaction.
+
+    Held analyses stay in the session index; the pane only *displays* one
+    while it still describes the current selection.
+    """
+    if trigger == "ai-close":
+        return active, False
+    if isinstance(trigger, dict) and trigger.get("type") == "ai-index-item":
+        return trigger.get("index"), True
+
+    held = analyses.find_by_key(entries, current_key) if current_key else None
+    if trigger == "ai-analyze":
+        # A held analysis already covers this selection: reveal it rather
+        # than spending another request.
+        return (held["id"], True) if held is not None else (active, visible)
+
+    # Selection or window changed.
+    if visible and held is None:
+        return active, False
+    if visible:
+        return held["id"], True
+    return active, visible
 
 
 def resolve_selection(
@@ -232,42 +370,88 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
             )
         return False, "Send the selected metrics to the AI for commentary"
 
+    # One owner for the pane: a run, a close, a show, and an index click all
+    # move the same three pieces of state, and the API call lives inside the
+    # callback that writes the pane body so the spinner reflects it.
     @app.callback(
-        Output("ai-commentary", "children"),
+        Output("ai-pane-body", "children"),
+        Output("ai-index", "children"),
+        Output("ai-analyses", "data"),
+        Output("ai-active", "data"),
+        Output("ai-visible", "data"),
+        Output("ai-last-run", "data"),
         Input("ai-run-count", "data"),
-        State("selection-store", "data"),
+        Input("ai-close", "n_clicks"),
+        Input("ai-analyze", "n_clicks"),
+        Input({"type": "ai-index-item", "index": ALL}, "n_clicks"),
+        Input("selection-store", "data"),
+        Input("date-window", "value"),
         State("metric-table", "derived_virtual_data"),
-        State("date-window", "value"),
+        State("ai-analyses", "data"),
+        State("ai-active", "data"),
+        State("ai-visible", "data"),
+        State("ai-last-run", "data"),
         prevent_initial_call=True,
     )
-    def analyze_with_ai(_runs, stored, visible_rows, window):
-        if not stored:
-            return ai_panel("Select at least one metric, then run the analysis.", error=True)
+    def update_pane(
+        runs, _close, _show, _items, stored, window, visible_rows, entries, active, visible, last_run
+    ):
+        ordered = selection_order(stored or [], visible_rows)
+        state = pane_update(
+            trigger=ctx.triggered_id,
+            changed_props=ctx.triggered_prop_ids,
+            runs=runs,
+            last_run=last_run,
+            ordered=ordered,
+            window=window,
+            entries=entries or [],
+            active=active,
+            visible=visible,
+            run_analysis=lambda names, win: generate_commentary(
+                metrics, names, window_cutoff(metrics, win or "all")
+            ),
+            now=datetime.now,
+        )
 
-        ordered = selection_order(stored, visible_rows)
-        cutoff = window_cutoff(metrics, window or "all")
-        try:
-            text = generate_commentary(metrics, ordered, cutoff)
-        except CommentaryError as exc:
-            return ai_panel(str(exc), error=True)
-        except Exception:  # pragma: no cover - defensive
-            logger.exception("Unexpected error generating AI commentary")
-            return ai_panel("Something went wrong generating the analysis.", error=True)
-        return ai_panel(text, count=len(ordered))
+        current_key = analyses.selection_key(ordered, window) if ordered else None
+        body = (
+            ai_error_body(state.error)
+            if state.error
+            else render_analysis(analyses.find(state.entries, state.active))
+        )
+        index = render_index(state.entries, state.active, current_key)
+        return body, index, state.entries, state.active, state.visible, state.last_run
+
+    @app.callback(
+        Output("ai-pane", "style"),
+        Output("split-pane", "className"),
+        Output("ai-analyze", "children"),
+        Input("ai-visible", "data"),
+        Input("ai-analyses", "data"),
+        Input("selection-store", "data"),
+        Input("date-window", "value"),
+        State("metric-table", "derived_virtual_data"),
+    )
+    def render_split(visible, entries, stored, window, visible_rows):
+        ordered = selection_order(stored or [], visible_rows)
+        key = analyses.selection_key(ordered, window) if ordered else None
+        held = analyses.find_by_key(entries, key) if key else None
+        label = "Show analysis" if (held is not None and not visible) else "Analysis with AI"
+        return (
+            {"display": "flex"} if visible else {"display": "none"},
+            "split-pane is-split" if visible else "split-pane",
+            [html.Span("✦", className="ai-icon"), label],
+        )
+
+    @app.callback(
+        Output("ai-download", "data"),
+        Input("ai-export", "n_clicks"),
+        State("ai-analyses", "data"),
+        prevent_initial_call=True,
+    )
+    def export_analyses(_clicks, entries):
+        return dcc.send_string(
+            analyses.export_markdown(entries), analyses.export_filename(datetime.now())
+        )
 
     return app
-
-
-def ai_panel(text: str, *, error: bool = False, count: int | None = None) -> html.Div:
-    """Wrap commentary (or an error) in the AI panel."""
-    label = "Analysis unavailable" if error else f"AI analysis · {count} metric(s)"
-    return html.Div(
-        className="ai-panel ai-error" if error else "ai-panel",
-        children=[
-            html.Div(
-                className="ai-panel-head",
-                children=[html.Span("✦", className="ai-icon"), label],
-            ),
-            dcc.Markdown(text) if not error else html.P(text),
-        ],
-    )

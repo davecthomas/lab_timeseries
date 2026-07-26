@@ -296,10 +296,148 @@ body {
     background: rgba(57, 135, 229, 0.22);
 }
 .modal-button-primary:hover { background: rgba(57, 135, 229, 0.36); }
+.split-pane {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+    min-width: 0;
+}
 .graphs-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
     gap: 1.25rem;
+    flex: 1;
+    min-width: 0;
+}
+/* With the pane open the charts get one column, so both stay readable. */
+.split-pane.is-split .graphs-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+.ai-pane {
+    width: 30rem;
+    max-width: 42%;
+    flex-shrink: 0;
+    flex-direction: column;
+    background: #1a1a19;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-left: 3px solid #3987e5;
+    border-radius: 12px;
+    position: sticky;
+    top: 6.5rem;
+    max-height: calc(100vh - 7.5rem);
+    overflow: hidden;
+}
+.ai-pane-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 0.9rem;
+    border-bottom: 1px solid #2c2c2a;
+    flex-shrink: 0;
+}
+.ai-pane-title {
+    font-size: 0.78rem;
+    color: #c3c2b7;
+    letter-spacing: 0.01em;
+}
+.ai-pane-action { margin-left: auto; font-size: 0.75rem; }
+.icon-button {
+    background: none;
+    border: none;
+    color: #898781;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0.15rem 0.3rem;
+    cursor: pointer;
+    border-radius: 6px;
+}
+.icon-button:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+.ai-index {
+    flex-shrink: 0;
+    max-height: 11rem;
+    overflow-y: auto;
+    border-bottom: 1px solid #2c2c2a;
+}
+.ai-index:empty { display: none; }
+.ai-index-heading {
+    font-size: 0.68rem;
+    color: #898781;
+    padding: 0.5rem 0.9rem 0.2rem;
+}
+.ai-index-row + .ai-index-row { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.ai-index-button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    padding: 0.45rem 0.9rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+.ai-index-button:hover { background: rgba(255, 255, 255, 0.05); }
+.ai-index-row.is-active .ai-index-button {
+    border-left-color: #3987e5;
+    background: rgba(57, 135, 229, 0.12);
+}
+.ai-index-label {
+    display: block;
+    font-size: 0.82rem;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ai-index-meta {
+    display: block;
+    font-size: 0.7rem;
+    color: #898781;
+    margin-top: 0.1rem;
+}
+.ai-pane-body {
+    overflow-y: auto;
+    padding: 0.9rem 1.1rem 1.2rem;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    color: #c3c2b7;
+}
+.ai-body-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.ai-body-title {
+    font-size: 0.8rem;
+    color: #ffffff;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ai-body-title.is-error { color: #d03b3b; }
+.copy-button {
+    margin-left: auto;
+    color: #898781;
+    flex-shrink: 0;
+}
+.copy-button:hover { color: #ffffff; }
+.ai-pane-body h2 { font-size: 0.95rem; color: #ffffff; margin: 0.9rem 0 0.35rem; }
+.ai-pane-body h3 { font-size: 0.86rem; color: #ffffff; margin: 0.8rem 0 0.3rem; }
+.ai-pane-body p { margin: 0 0 0.55rem; }
+.ai-pane-body ul { margin: 0 0 0.55rem; padding-left: 1.1rem; }
+.ai-pane-body strong { color: #ffffff; }
+@media (max-width: 1400px) {
+    .split-pane { flex-direction: column; }
+    .ai-pane {
+        width: 100%;
+        max-width: none;
+        position: static;
+        max-height: none;
+        order: -1;
+    }
+    .ai-pane-body { max-height: 26rem; }
 }
 .chart-card {
     background: #1a1a19;
