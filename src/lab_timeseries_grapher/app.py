@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
-from . import analyses, theme
+from . import analyses, export, theme
 from .commentary import CommentaryError, generate_commentary
 from .data import STATUS_HIGH, STATUS_LOW, MetricSeries
 from .layout import (
@@ -453,5 +453,32 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
         return dcc.send_string(
             analyses.export_markdown(entries), analyses.export_filename(datetime.now())
         )
+
+    @app.callback(
+        Output("export-csv", "disabled"),
+        Output("export-csv", "title"),
+        Input("selection-store", "data"),
+    )
+    def gate_export(stored):
+        if not stored:
+            return True, "Select at least one metric to export"
+        return False, f"Download the {len(stored)} selected metric(s) as CSV"
+
+    @app.callback(
+        Output("metrics-download", "data"),
+        Input("export-csv", "n_clicks"),
+        State("selection-store", "data"),
+        State("metric-table", "derived_virtual_data"),
+        State("date-window", "value"),
+        prevent_initial_call=True,
+    )
+    def export_metrics_csv(_clicks, stored, visible_rows, window):
+        ordered = selection_order(stored or [], visible_rows)
+        if not ordered:
+            return no_update
+        cutoff = window_cutoff(metrics, window or "all")
+        text = export.metrics_csv(metrics, ordered, cutoff)
+        logger.info("Exporting %d metric(s) as CSV", len(ordered))
+        return dcc.send_string(text, export.csv_filename(datetime.now()))
 
     return app

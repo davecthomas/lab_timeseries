@@ -70,6 +70,23 @@ body {
     gap: 0.75rem;
     margin-left: auto;
 }
+.export-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #c3c2b7;
+    font-family: inherit;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.95rem;
+    cursor: pointer;
+    align-self: center;
+}
+.export-button:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+.export-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.export-icon { font-size: 0.9rem; line-height: 1; }
 .stat-tile {
     background: #1a1a19;
     border: 1px solid rgba(255, 255, 255, 0.10);

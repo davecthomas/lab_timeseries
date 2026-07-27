@@ -9,6 +9,7 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - Metric list with latest value, draw date, and in/out-of-range status
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
+- **Export CSV** — downloads the selected metrics as `blood-metrics-YYYY-MM-DD.csv`
 - Chart selection survives filtering; hidden selections stay charted
 - **Analysis with AI** — commentary on the selected metrics from Claude, behind a first-run consent prompt (see below)
 
@@ -33,6 +34,14 @@ By default the app loads `data/labs_results.csv`. If that name is absent and `da
 - `Panel` — groups metrics for the panel filter
 
 Other columns are ignored.
+
+## Exporting data
+
+**Export CSV**, top right, downloads the metrics you have selected — one row per measurement, respecting the current date window — as `blood-metrics-YYYY-MM-DD.csv`, stamped with the export date.
+
+Columns: `Date`, `Test Name`, `Panel`, `Value`, `Value_Numeric`, `Units`, `Range_Low`, `Range_High`, `Status`. `Value` keeps the lab's original string (`<0.1`, `3,457 cells/uL`); `Value_Numeric` is the parsed number the charts plot; `Status` is `in`, `low`, `high`, or blank when the lab gave no usable range.
+
+It exports the selection rather than the whole file, so **Select all** then **Export CSV** gives you everything. The button is disabled while nothing is selected.
 
 ## AI commentary
 
@@ -116,6 +125,7 @@ Code layout (`src/lab_timeseries_grapher/`):
 | `theme.py` | Color tokens and page CSS |
 | `commentary.py` | Prompt assembly and the Claude call for AI commentary |
 | `analyses.py` | Session-held analyses: identity by selection, index, markdown export |
+| `export.py` | CSV export of the metric data in view |
 | `app.py` | App factory and callbacks |
 | `cli.py` | Command-line entry point |
 
