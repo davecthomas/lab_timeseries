@@ -7,7 +7,7 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 
 | Path | Purpose |
 |---|---|
-| `src/lab_timeseries_grapher/` | The app package: `data.py` (CSV → `MetricSeries`), `figures.py` (Plotly charts), `layout.py` (Dash layout), `theme.py` (colors/CSS), `commentary.py` (AI prompt + Claude call), `analyses.py` (session-held analyses + export), `app.py` (factory + callbacks), `cli.py` (entry point) |
+| `src/lab_timeseries_grapher/` | The app package: `data.py` (CSV → `MetricSeries`), `figures.py` (Plotly charts), `layout.py` (Dash layout), `theme.py` (colors/CSS), `commentary.py` (AI prompt + Claude call), `analyses.py` (session-held analyses + export), `export.py` (metric CSV export), `app.py` (factory + callbacks), `cli.py` (entry point) |
 | `skills/bloodwork-analysis-helper/` | `SKILL.md` — the system prompt for AI commentary; edit here rather than in Python |
 | `tests/` | pytest suite for data shaping, figures, prompt assembly, and callback helpers |
 | `data/` | Gitignored lab CSVs — never commit or paste contents; values are personal health data |
@@ -32,6 +32,7 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 - AI calls go through `ai-api-unified` (`AIFactory.get_ai_completions_client`), never a provider SDK directly; Claude is the only engine wired up. Secrets come from a gitignored `.env` (see `.env.example`)
 - Lab values reach the network only after the consent dialog; the analysis callback listens on the `ai-run-count` store, which only the consent gate writes. Keep that ordering — do not wire an analysis trigger straight to a button
 - A run is detected by the counter advancing (`is_run_request`), never by `ctx.triggered_id` alone: clicking analyze changes `ai-analyze` and `ai-run-count` in one chain, and Dash then invokes the pane callback once reporting only the first trigger. Trigger-driven pane state lives in `resolve_pane_view` so it stays testable — Dash's wrapper rebuilds the callback context, so tests cannot inject a `triggered_id`
+- Downloads are selection-scoped and window-scoped, and use `dcc.Download` + `dcc.send_string`; filenames carry the export date
 - Analyses are keyed by metric selection + date window (`analyses.selection_key`); the pane shows one only while it matches the current selection
 - Prompt text lives in `skills/*/SKILL.md`, never inline in Python, and is never shown to the end user
 - Ruff rule set is pinned in `pyproject.toml` (`E4,E7,E9,F,UP,C4,I`, line length 100)

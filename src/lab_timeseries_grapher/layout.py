@@ -404,6 +404,7 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             dcc.Store(id="ai-run-count", data=0),
             dcc.Store(id="ai-last-run", data=0),
             dcc.Download(id="ai-download"),
+            dcc.Download(id="metrics-download"),
             html.Div(
                 className="filter-row",
                 children=[
@@ -450,6 +451,15 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                         ]
                     ),
                     stat_tiles(metrics),
+                    html.Button(
+                        # ↓ rather than a download glyph: U+2B73 and friends
+                        # have no coverage in the system font and render as
+                        # tofu. This matches the ▲▼● already used elsewhere.
+                        [html.Span("↓", className="export-icon"), "Export CSV"],
+                        id="export-csv",
+                        className="export-button",
+                        n_clicks=0,
+                    ),
                 ],
             ),
             html.Div(className="app-shell", children=[sidebar, content]),
