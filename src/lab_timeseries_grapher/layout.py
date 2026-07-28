@@ -12,6 +12,7 @@ from .analyses import window_label
 from .commentary import configured_model_name
 from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
 from .figures import make_figure
+from .reference_ranges import describe_reference
 from .synonyms import format_synonyms
 
 INITIAL_METRIC_COUNT = 10
@@ -97,6 +98,22 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
     aka = format_synonyms(series.name)
     if aka:
         body.append(html.P(aka, className="card-aka"))
+
+    ref = getattr(series, "reference", None)
+    if ref is not None:
+        parts: list = [html.Span(f"Range {describe_reference(ref)}", className="range-ref")]
+        # Say so when the lab that ran the sample disagreed with the reference.
+        if series.lab_band and series.lab_band != series.band:
+            low, high = series.lab_band
+            parts.append(
+                html.Span(f"your lab reported {low:g}–{high:g}", className="range-lab")
+            )
+        body.append(html.P(parts, className="card-range"))
+    elif series.lab_band:
+        low, high = series.lab_band
+        body.append(
+            html.P(f"Range {low:g}–{high:g} {series.units} (your lab)", className="card-range")
+        )
 
     return html.Div(
         className="chart-card",

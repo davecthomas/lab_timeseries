@@ -127,7 +127,9 @@ class TestAppendMeasurement:
         reloaded = prepare_tests(load_dataframe(csv_path))["ALT"]
         assert reloaded.values == [25.0, 23.0, 31.0]
         assert reloaded.latest_value == 31.0
-        assert reloaded.band == (0.0, 50.0)
+        # The published reference draws the band; the lab's own range is kept.
+        assert reloaded.band == (4.0, 36.0)
+        assert reloaded.lab_band == (0.0, 50.0)
         assert reloaded.latest_status == "in"
 
     def test_out_of_range_entry_is_flagged(self, csv_path, metrics):

@@ -10,6 +10,7 @@ from dash import exceptions
 
 from .app import create_app
 from .data import data_dir, resolve_csv_path
+from .reference_ranges import Profile
 from .state import AppData
 
 logger = logging.getLogger("lab_timeseries_grapher")
@@ -38,6 +39,14 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8050, help="Port for the web server")
     ap.add_argument("--debug", action="store_true", help="Run Dash in debug mode")
     ap.add_argument(
+        "--age", type=int, default=60,
+        help="Age used to pick age-specific reference ranges (default: 60)",
+    )
+    ap.add_argument(
+        "--sex", choices=["male", "female"], default="male",
+        help="Sex used to pick sex-specific reference ranges (default: male)",
+    )
+    ap.add_argument(
         "--log-level",
         default=os.getenv("LAB_TS_LOG_LEVEL", "INFO"),
         help="Python logging level (e.g. DEBUG, INFO, WARNING)",
@@ -60,11 +69,14 @@ def main() -> None:
     logger.info("Resolved CSV path: %s", csv_path)
 
     # AppData keeps the CSV path so a manual entry can reload without a restart.
-    app_data = AppData.from_csv(csv_path)
+    app_data = AppData.from_csv(csv_path, Profile(age=args.age, sex=args.sex))
     if not app_data.metrics:
         logger.error("CSV yielded no plottable rows after preprocessing")
         raise SystemExit("No plottable rows were found in the CSV.")
-    logger.info("Prepared %d metrics for display", len(app_data.metrics))
+    logger.info(
+        "Prepared %d metrics for display (reference profile: %s, age %s)",
+        len(app_data.metrics), args.sex, args.age,
+    )
 
     app = create_app(app_data)
 

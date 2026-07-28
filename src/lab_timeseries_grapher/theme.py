@@ -346,6 +346,16 @@ body {
     font-style: italic;
 }
 .entry-aka:empty { display: none; }
+.card-range {
+    font-size: 0.72rem;
+    color: #898781;
+    margin: 0 0 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.card-range .range-ref { color: #c3c2b7; }
+.card-range .range-lab::before { content: "· "; }
 .card-description {
     font-size: 0.78rem;
     line-height: 1.45;

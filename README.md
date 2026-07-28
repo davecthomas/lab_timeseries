@@ -143,6 +143,19 @@ Code layout (`src/lab_timeseries_grapher/`):
 
 Python 3.11–3.13 is required (`ai-api-unified` sets the floor).
 
+## Reference ranges
+
+Bands are drawn from published population reference ranges selected for an age and sex, so a series spanning several labs is judged against one consistent scale. The range your own lab reported is kept and shown beside it on each chart.
+
+```bash
+make run                       # defaults to age 60, male
+poetry run lab-timeseries-grapher --age 72 --sex female
+```
+
+Ranges live in `src/lab_timeseries_grapher/reference_ranges.py`, one entry per analyte with the source it came from (MedlinePlus, StatPearls, NCEP ATP III, Mayo Clinic Labs, ADA). PSA and ESR are banded by age; hemoglobin, hematocrit and RBC by sex.
+
+**These are authored from published sources, not from your lab**, and published sources disagree — free T4 is 0.9–1.7 ng/dL at Mayo and 0.70–1.48 on one report in this dataset. A range is applied only when its units reconcile with the metric's; where they cannot, or where no consensus interval exists (particle assays, calculated ratios), the lab's own range stands.
+
 ## Notes
 
 - The normal-range band uses the most frequent `(Range_Low, Range_High)` pair for the test; with no repeated pair it falls back to the median low/high.

@@ -121,10 +121,12 @@ class MetricSeries:
     dates: list[pd.Timestamp]
     values: list[float]
     display_values: list[str]  # original result strings, e.g. "<0.1"
-    band: tuple[float, float] | None
+    band: tuple[float, float] | None  # the band the charts judge against
     units: str
     panel: str
     description: str = ""  # what the test measures, from the CSV's Notes
+    lab_band: tuple[float, float] | None = None  # what this lab reported
+    reference: object = None  # reference_ranges.Reference, when one applies
 
     @property
     def last_date(self) -> pd.Timestamp:
@@ -156,8 +158,16 @@ class MetricSeries:
         return [self.status_of(v) for v in self.values]
 
 
-def prepare_tests(df: pd.DataFrame) -> dict[str, MetricSeries]:
-    """Return a dictionary keyed by test name with cleaned time-series data."""
+def prepare_tests(df: pd.DataFrame, profile=None) -> dict[str, MetricSeries]:
+    """Return a dictionary keyed by test name with cleaned time-series data.
+
+    A published reference range for the profile draws the band when one
+    applies in the metric's own units, so a series spanning several labs is
+    judged consistently. The lab's own range is kept as `lab_band`.
+    """
+    from .reference_ranges import Profile, reference_for, reference_in_units
+
+    profile = profile or Profile()
     tests: dict[str, MetricSeries] = {}
     has_value_col = "Value" in df.columns
     has_panel_col = "Panel" in df.columns
@@ -181,15 +191,21 @@ def prepare_tests(df: pd.DataFrame) -> dict[str, MetricSeries]:
         else:
             displays = [f"{n:g}" for n in dfp["Value_Num"]]
 
+        units = mode_str(dfp["Units"])
+        lab_band = most_common_range(dfp["Range_Low"], dfp["Range_High"])
+        reference = reference_in_units(reference_for(str(test_name), profile), units)
+
         tests[str(test_name)] = MetricSeries(
             name=str(test_name),
             dates=dfp["Date_parsed"].tolist(),
             values=dfp["Value_Num"].astype(float).tolist(),
             display_values=displays,
-            band=most_common_range(dfp["Range_Low"], dfp["Range_High"]),
-            units=mode_str(dfp["Units"]),
+            band=(reference.band if reference and reference.band else lab_band),
+            units=units,
             panel=mode_str(dfp["Panel"]) if has_panel_col else "",
             description=describe(dfp["Notes"]) if has_notes_col else "",
+            lab_band=lab_band,
+            reference=reference,
         )
 
         logger.debug(
