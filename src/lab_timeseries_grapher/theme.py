@@ -144,34 +144,60 @@ body {
     text-underline-offset: 2px;
 }
 .link-button:hover { color: #ffffff; }
-/* Dash ships its own active-cell style — a red wash, rgba(255,65,54,0.2),
-   with the cell's own text colour left alone. On this dark surface that reads
-   as pink behind grey text. style_data_conditional does not beat it, so it is
-   overridden here. */
-.dash-spreadsheet-inner td.cell--selected,
-.dash-spreadsheet-inner td.focused,
-.dash-spreadsheet-container .dash-spreadsheet-inner td.cell--selected,
-.dash-spreadsheet-container .dash-spreadsheet-inner td.focused {
-    background-color: rgba(57, 135, 229, 0.30) !important;
-    box-shadow: inset 0 0 0 1px rgba(57, 135, 229, 0.85) !important;
+/* Metric table.
+   Dash's own stylesheet paints cells white via
+   `.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td`
+   (specificity 0,3,1). The dark look came from an inline style that
+   `style_cell` sets — and Dash drops that inline style when it re-renders a
+   cell after a click, leaving the white default behind. Relying on inline
+   styles for the surface is therefore not safe.
+   Every rule below carries the same long prefix so it out-specifies Dash's
+   default, and state rules add one class on top so they beat the base. */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td,
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th,
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr,
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tbody,
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner {
+    background-color: transparent !important;
 }
-/* Text only — column-0 is excluded so the status glyph keeps its red/green. */
-.dash-spreadsheet-inner td.cell--selected:not(.column-0),
-.dash-spreadsheet-inner td.focused:not(.column-0) { color: #ffffff !important; }
+/* column-0 is excluded rather than reset: `inherit` would take the row's
+   colour, and an !important override would beat the inline red/green that
+   style_data_conditional sets on the status glyph. */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td:not(.column-0) {
+    color: #c3c2b7 !important;
+}
 
-/* Checkbox-selected rows. Dash's `state: 'selected'` styles selected *cells*,
-   not rows ticked via the checkbox column, so those rows had no highlight at
-   all beyond the tick itself. */
-.dash-spreadsheet-inner tr:has(.dash-select-cell input:checked) td {
-    background-color: rgba(57, 135, 229, 0.13);
+/* Rows ticked in the checkbox column. Dash's `state: 'selected'` styles
+   selected *cells*, not checkbox-selected rows, so this cannot come from
+   style_data_conditional. */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner
+    tr:has(.dash-select-cell input:checked) td {
+    background-color: rgba(57, 135, 229, 0.13) !important;
 }
-.dash-spreadsheet-inner tr:has(.dash-select-cell input:checked) td.column-1 {
-    color: #ffffff;
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner
+    tr:has(.dash-select-cell input:checked) td.column-1 {
+    color: #ffffff !important;
 }
-.dash-spreadsheet-inner tr:has(.dash-select-cell input:checked) .dash-select-cell {
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner
+    tr:has(.dash-select-cell input:checked) .dash-select-cell {
     box-shadow: inset 2px 0 0 #3987e5;
 }
-.dash-spreadsheet-inner td .dash-cell-value.unfocused.selectable::selection {
+
+/* The clicked cell. Dash's default here is a red wash left over its own muted
+   text, which reads as pink behind grey. */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td.cell--selected,
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td.focused {
+    background-color: rgba(57, 135, 229, 0.34) !important;
+    box-shadow: inset 0 0 0 1px rgba(57, 135, 229, 0.85) !important;
+}
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner
+    td.cell--selected:not(.column-0),
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner
+    td.focused:not(.column-0) {
+    color: #ffffff !important;
+}
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner
+    td .dash-cell-value.unfocused.selectable::selection {
     background: rgba(57, 135, 229, 0.45);
     color: #ffffff;
 }
@@ -242,23 +268,40 @@ body {
     color: #ffffff;
     background: rgba(57, 135, 229, 0.15);
 }
+/* Same visual weight as the AI button beside it: the previous ghost outline
+   was read as absent. */
 .add-button {
     margin-left: auto;
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    gap: 0.4rem;
+    border: 1px solid rgba(57, 135, 229, 0.55);
     border-radius: 999px;
-    background: transparent;
-    color: #c3c2b7;
+    background: rgba(57, 135, 229, 0.12);
+    color: #ffffff;
     font-family: inherit;
     font-size: 0.82rem;
     padding: 0.4rem 1rem;
     cursor: pointer;
 }
-.add-button:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
-.add-button:disabled { opacity: 0.45; cursor: not-allowed; }
-.add-icon { font-size: 0.8rem; line-height: 1; }
+.add-button:hover { background: rgba(57, 135, 229, 0.24); }
+.add-icon { font-size: 0.8rem; line-height: 1; color: #3987e5; }
+/* Second entry point, beside the metric list where the metric is chosen. */
+.sidebar-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: #3987e5;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.sidebar-add:hover { color: #ffffff; }
 .entry-picker { margin-bottom: 0.9rem; }
 .entry-picker .control-label { display: block; margin-bottom: 0.35rem; }
 .entry-picker .Select-control, .entry-picker .Select__control { min-height: 2.35rem; }

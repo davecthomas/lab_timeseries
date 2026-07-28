@@ -481,6 +481,13 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                     html.Span(id="selection-count", className="selection-count"),
                 ],
             ),
+            html.Button(
+                [html.Span("＋", className="add-icon"), "Add a result"],
+                id="entry-open-sidebar",
+                className="sidebar-add",
+                n_clicks=0,
+                title="Record a new lab result",
+            ),
             metric_table(table_rows, initial_selection),
         ],
     )

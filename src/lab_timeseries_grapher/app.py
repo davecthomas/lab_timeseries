@@ -484,6 +484,7 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Output("data-version", "data"),
         Output("entry-value", "value"),
         Input("entry-open", "n_clicks"),
+        Input("entry-open-sidebar", "n_clicks"),
         Input("entry-cancel", "n_clicks"),
         Input("entry-save", "n_clicks"),
         State("selection-store", "data"),
@@ -493,12 +494,12 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         State("data-version", "data"),
         prevent_initial_call=True,
     )
-    def entry_dialog_flow(_open, _cancel, _save, stored, chosen, when, value, version):
+    def entry_dialog_flow(_open, _open2, _cancel, _save, stored, chosen, when, value, version):
         trigger = ctx.triggered_id
         shown = {"display": "flex"}
         hidden = {"display": "none"}
 
-        if trigger == "entry-open":
+        if trigger in {"entry-open", "entry-open-sidebar"}:
             # Pre-fill from the selection when it is unambiguous; otherwise
             # leave the picker empty for the user to choose.
             preset = (stored or [None])[0] if len(stored or []) == 1 else None
