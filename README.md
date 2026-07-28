@@ -8,7 +8,7 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - Summary tiles: metrics tracked, lab draws, latest draw, out-of-range count
 - Metric list with latest value, draw date, and in/out-of-range status
 - A plain-language description on each chart saying what that test measures
-- **Add data** — record a new result for a metric; the chart, list, and tiles update immediately
+- **Add data** — record a new result for any metric; the chart, list, and tiles update immediately
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
 - **Export CSV** — downloads the selected metrics as `blood-metrics-YYYY-MM-DD.csv`
@@ -39,7 +39,7 @@ Other columns are ignored.
 
 ## Adding a result
 
-Select exactly one metric and press **＋ Add data**. The dialog names the test, its units, and what it measures, then takes a date from a calendar and a value.
+Press **＋ Add data**, choose the metric, pick a date from the calendar, and enter a value. The dialog shows the test's units and what it measures once a metric is chosen. When exactly one metric is selected in the sidebar, the picker is pre-filled with it.
 
 The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
 

@@ -464,23 +464,22 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         )
 
     @app.callback(
-        Output("entry-open", "disabled"),
-        Output("entry-open", "title"),
-        Input("selection-store", "data"),
+        Output("entry-metric", "children"),
+        Output("entry-units", "children"),
+        Output("entry-description", "children"),
+        Input("entry-metric-select", "value"),
     )
-    def gate_entry(stored):
-        n = len(stored or [])
-        if n != 1:
-            return True, "Select exactly one metric to add a result to"
-        return False, f"Add a result to {stored[0]}"
+    def describe_chosen_metric(name):
+        series = data.metrics.get(name) if name else None
+        if series is None:
+            return "", "", ""
+        return series.name, series.units, series.description
 
     # One owner for the dialog: opening, cancelling and saving all move the
     # same pieces, and a failed save must leave the dialog up with its reason.
     @app.callback(
         Output("entry-modal", "style"),
-        Output("entry-metric", "children"),
-        Output("entry-units", "children"),
-        Output("entry-description", "children"),
+        Output("entry-metric-select", "value"),
         Output("entry-error", "children"),
         Output("data-version", "data"),
         Output("entry-value", "value"),
@@ -488,45 +487,36 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Input("entry-cancel", "n_clicks"),
         Input("entry-save", "n_clicks"),
         State("selection-store", "data"),
+        State("entry-metric-select", "value"),
         State("entry-date", "date"),
         State("entry-value", "value"),
         State("data-version", "data"),
         prevent_initial_call=True,
     )
-    def entry_dialog_flow(_open, _cancel, _save, stored, when, value, version):
+    def entry_dialog_flow(_open, _cancel, _save, stored, chosen, when, value, version):
         trigger = ctx.triggered_id
-        selected = (stored or [None])[0] if len(stored or []) == 1 else None
         shown = {"display": "flex"}
         hidden = {"display": "none"}
 
         if trigger == "entry-open":
-            series = data.metrics.get(selected) if selected else None
-            return (
-                shown,
-                selected or "",
-                series.units if series else "",
-                series.description if series else "",
-                "",
-                no_update,
-                None,
-            )
+            # Pre-fill from the selection when it is unambiguous; otherwise
+            # leave the picker empty for the user to choose.
+            preset = (stored or [None])[0] if len(stored or []) == 1 else None
+            return shown, preset, "", no_update, None
 
         if trigger == "entry-cancel":
-            return hidden, no_update, no_update, no_update, "", no_update, None
+            return hidden, no_update, "", no_update, None
 
         try:
-            entries.append_measurement(data.csv_path, data.metrics, selected, when, value)
+            entries.append_measurement(data.csv_path, data.metrics, chosen, when, value)
         except entries.EntryError as exc:
-            return shown, no_update, no_update, no_update, str(exc), no_update, no_update
+            return shown, no_update, str(exc), no_update, no_update
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("Failed to append manual entry")
-            return (
-                shown, no_update, no_update, no_update,
-                f"Could not save: {exc}", no_update, no_update,
-            )
+            return shown, no_update, f"Could not save: {exc}", no_update, no_update
 
         data.reload()
-        return hidden, no_update, no_update, no_update, "", (version or 0) + 1, None
+        return hidden, no_update, "", (version or 0) + 1, None
 
     @app.callback(
         Output("stat-tiles", "children"),

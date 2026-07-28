@@ -177,8 +177,10 @@ def metric_table(table_rows: list[dict], initial_selection: list[str]) -> dash_t
                 "if": {"column_id": "status_glyph", "filter_query": "{status} = in"},
                 "color": theme.STATUS_GOOD,
             },
-            {"if": {"state": "selected"}, "background": "rgba(57, 135, 229, 0.18)", "border": "none"},
-            {"if": {"state": "active"}, "background": "rgba(57, 135, 229, 0.28)", "border": "none"},
+            # Cell selection and the active cell. Checkbox-selected *rows* are
+            # styled in theme.py — Dash's `state` keys do not cover them.
+            {"if": {"state": "selected"}, "border": "none"},
+            {"if": {"state": "active"}, "border": "none"},
         ],
     )
 
@@ -299,8 +301,13 @@ def ai_error(message: str) -> list:
     ]
 
 
-def entry_dialog() -> html.Div:
-    """Manual measurement entry for the one selected metric."""
+def entry_dialog(metric_names: list[str]) -> html.Div:
+    """Manual measurement entry.
+
+    The metric is chosen inside the dialog rather than required beforehand:
+    gating the button on "exactly one selected" left it disabled and faint on
+    load, which read as the feature being absent.
+    """
     return html.Div(
         id="entry-modal",
         className="modal-backdrop",
@@ -309,6 +316,19 @@ def entry_dialog() -> html.Div:
             className="modal-card",
             children=[
                 html.P("Add a result", className="entry-eyebrow"),
+                html.Div(
+                    className="entry-picker",
+                    children=[
+                        html.Label("Metric", className="control-label", htmlFor="entry-metric-select"),
+                        dcc.Dropdown(
+                            id="entry-metric-select",
+                            options=[{"label": n, "value": n} for n in metric_names],
+                            placeholder="Choose a metric…",
+                            clearable=False,
+                            optionHeight=44,
+                        ),
+                    ],
+                ),
                 html.H2(id="entry-metric", className="entry-metric"),
                 html.P(id="entry-units", className="entry-units"),
                 html.P(id="entry-description", className="entry-description"),
@@ -547,6 +567,6 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             ),
             html.Div(className="app-shell", children=[sidebar, content]),
             consent_dialog(configured_model_name()),
-            entry_dialog(),
+            entry_dialog(sorted(metrics)),
         ]
     )

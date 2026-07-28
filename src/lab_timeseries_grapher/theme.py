@@ -144,6 +144,37 @@ body {
     text-underline-offset: 2px;
 }
 .link-button:hover { color: #ffffff; }
+/* Dash ships its own active-cell style — a red wash, rgba(255,65,54,0.2),
+   with the cell's own text colour left alone. On this dark surface that reads
+   as pink behind grey text. style_data_conditional does not beat it, so it is
+   overridden here. */
+.dash-spreadsheet-inner td.cell--selected,
+.dash-spreadsheet-inner td.focused,
+.dash-spreadsheet-container .dash-spreadsheet-inner td.cell--selected,
+.dash-spreadsheet-container .dash-spreadsheet-inner td.focused {
+    background-color: rgba(57, 135, 229, 0.30) !important;
+    box-shadow: inset 0 0 0 1px rgba(57, 135, 229, 0.85) !important;
+}
+/* Text only — column-0 is excluded so the status glyph keeps its red/green. */
+.dash-spreadsheet-inner td.cell--selected:not(.column-0),
+.dash-spreadsheet-inner td.focused:not(.column-0) { color: #ffffff !important; }
+
+/* Checkbox-selected rows. Dash's `state: 'selected'` styles selected *cells*,
+   not rows ticked via the checkbox column, so those rows had no highlight at
+   all beyond the tick itself. */
+.dash-spreadsheet-inner tr:has(.dash-select-cell input:checked) td {
+    background-color: rgba(57, 135, 229, 0.13);
+}
+.dash-spreadsheet-inner tr:has(.dash-select-cell input:checked) td.column-1 {
+    color: #ffffff;
+}
+.dash-spreadsheet-inner tr:has(.dash-select-cell input:checked) .dash-select-cell {
+    box-shadow: inset 2px 0 0 #3987e5;
+}
+.dash-spreadsheet-inner td .dash-cell-value.unfocused.selectable::selection {
+    background: rgba(57, 135, 229, 0.45);
+    color: #ffffff;
+}
 .selection-count {
     margin-left: auto;
     font-size: 0.72rem;
@@ -228,6 +259,9 @@ body {
 .add-button:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
 .add-button:disabled { opacity: 0.45; cursor: not-allowed; }
 .add-icon { font-size: 0.8rem; line-height: 1; }
+.entry-picker { margin-bottom: 0.9rem; }
+.entry-picker .control-label { display: block; margin-bottom: 0.35rem; }
+.entry-picker .Select-control, .entry-picker .Select__control { min-height: 2.35rem; }
 .entry-eyebrow {
     font-size: 0.7rem;
     color: #898781;

@@ -33,6 +33,8 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 - Lab values reach the network only after the consent dialog; the analysis callback listens on the `ai-run-count` store, which only the consent gate writes. Keep that ordering — do not wire an analysis trigger straight to a button
 - A run is detected by the counter advancing (`is_run_request`), never by `ctx.triggered_id` alone: clicking analyze changes `ai-analyze` and `ai-run-count` in one chain, and Dash then invokes the pane callback once reporting only the first trigger. Trigger-driven pane state lives in `resolve_pane_view` so it stays testable — Dash's wrapper rebuilds the callback context, so tests cannot inject a `triggered_id`
 - Callbacks read `data.metrics` / `data.table_rows` off `AppData` rather than closing over them, so a manual entry can reload the CSV mid-session; a `data-version` store fans the refresh out to the table, tiles and charts
+- The metric for a manual entry is chosen inside the dialog, not required beforehand; gating the button on the sidebar selection left it disabled on load and read as the feature being absent
+- Dash's DataTable ships its own active-cell style (a red wash) and its `state` keys do not cover checkbox-selected rows; both are handled by CSS in `theme.py`, not `style_data_conditional`
 - Manual entries append to the labs CSV atomically (temp file + `os.replace`) and inherit units/range/panel from the metric's latest existing row; `Notes` records provenance
 - Metric descriptions come from the `Notes` column via `data.describe()`; never generate them
 - Downloads are selection-scoped and window-scoped, and use `dcc.Download` + `dcc.send_string`; filenames carry the export date
