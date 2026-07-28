@@ -377,6 +377,14 @@ body {
     width: 100%;
     height: 2.35rem;
 }
+.range-pair { display: flex; align-items: center; gap: 0.4rem; }
+.range-pair .search-input { min-width: 0; }
+.range-sep { font-size: 0.78rem; color: #898781; }
+.entry-hint {
+    font-size: 0.72rem;
+    color: #898781;
+    margin: 0.1rem 0 0;
+}
 .entry-error {
     min-height: 1.1rem;
     margin: 0.4rem 0 0.9rem;

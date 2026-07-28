@@ -26,6 +26,10 @@ STATUS_LOW = "low"
 STATUS_HIGH = "high"
 STATUS_UNKNOWN = "unknown"
 
+# Marks rows written by the entry dialog; see entries.NOTE_PREFIX.
+MANUAL_NOTE = "Manually entered"
+CUSTOM_RANGE_NOTE = "custom range"
+
 
 def coerce_float(x) -> float | None:
     """Try to coerce a cell to float; return None if impossible."""
@@ -127,6 +131,7 @@ class MetricSeries:
     description: str = ""  # what the test measures, from the CSV's Notes
     lab_band: tuple[float, float] | None = None  # what this lab reported
     reference: object = None  # reference_ranges.Reference, when one applies
+    override_band: tuple[float, float] | None = None  # entered by hand, wins
 
     @property
     def last_date(self) -> pd.Timestamp:
@@ -195,17 +200,32 @@ def prepare_tests(df: pd.DataFrame, profile=None) -> dict[str, MetricSeries]:
         lab_band = most_common_range(dfp["Range_Low"], dfp["Range_High"])
         reference = reference_in_units(reference_for(str(test_name), profile), units)
 
+        # A range the user actually changed in the entry dialog outranks both
+        # the reference and the lab. entries.py marks only those rows, so a
+        # pre-filled range left untouched does not become an override.
+        override_band = None
+        if has_notes_col:
+            notes = dfp["Notes"].astype(str)
+            manual = dfp[notes.str.startswith(MANUAL_NOTE) & notes.str.contains(CUSTOM_RANGE_NOTE)]
+            if not manual.empty:
+                override_band = most_common_range(manual["Range_Low"], manual["Range_High"])
+
         tests[str(test_name)] = MetricSeries(
             name=str(test_name),
             dates=dfp["Date_parsed"].tolist(),
             values=dfp["Value_Num"].astype(float).tolist(),
             display_values=displays,
-            band=(reference.band if reference and reference.band else lab_band),
+            band=(
+                override_band
+                or (reference.band if reference and reference.band else None)
+                or lab_band
+            ),
             units=units,
             panel=mode_str(dfp["Panel"]) if has_panel_col else "",
             description=describe(dfp["Notes"]) if has_notes_col else "",
             lab_band=lab_band,
             reference=reference,
+            override_band=override_band,
         )
 
         logger.debug(

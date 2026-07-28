@@ -469,13 +469,27 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Output("entry-units", "children"),
         Output("entry-description", "children"),
         Output("entry-aka", "children"),
+        Output("entry-units-input", "value"),
+        Output("entry-range-low", "value"),
+        Output("entry-range-high", "value"),
         Input("entry-metric-select", "value"),
     )
     def describe_chosen_metric(name):
         series = data.metrics.get(name) if name else None
         if series is None:
-            return "", "", "", ""
-        return series.name, series.units, series.description, format_synonyms(series.name)
+            return "", "", "", "", "", None, None
+        # Pre-fill with the band the charts already use, so the field only
+        # needs touching when the lab report disagrees with it.
+        low, high = series.band if series.band else (None, None)
+        return (
+            series.name,
+            series.units,
+            series.description,
+            format_synonyms(series.name),
+            series.units,
+            low,
+            high,
+        )
 
     # One owner for the dialog: opening, cancelling and saving all move the
     # same pieces, and a failed save must leave the dialog up with its reason.
@@ -493,10 +507,15 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         State("entry-metric-select", "value"),
         State("entry-date", "date"),
         State("entry-value", "value"),
+        State("entry-units-input", "value"),
+        State("entry-range-low", "value"),
+        State("entry-range-high", "value"),
         State("data-version", "data"),
         prevent_initial_call=True,
     )
-    def entry_dialog_flow(_open, _open2, _cancel, _save, stored, chosen, when, value, version):
+    def entry_dialog_flow(
+        _open, _open2, _cancel, _save, stored, chosen, when, value, units, low, high, version
+    ):
         trigger = ctx.triggered_id
         shown = {"display": "flex"}
         hidden = {"display": "none"}
@@ -511,7 +530,10 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
             return hidden, no_update, "", no_update, None
 
         try:
-            entries.append_measurement(data.csv_path, data.metrics, chosen, when, value)
+            entries.append_measurement(
+                data.csv_path, data.metrics, chosen, when, value,
+                units=units, range_low=low, range_high=high,
+            )
         except entries.EntryError as exc:
             return shown, no_update, str(exc), no_update, no_update
         except Exception as exc:  # pragma: no cover - defensive

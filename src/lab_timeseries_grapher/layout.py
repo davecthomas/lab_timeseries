@@ -390,6 +390,41 @@ def entry_dialog(metric_names: list[str]) -> html.Div:
                         ),
                     ],
                 ),
+                html.Div(
+                    className="entry-fields entry-range",
+                    children=[
+                        html.Div(
+                            [
+                                html.Label("Units", className="control-label", htmlFor="entry-units-input"),
+                                dcc.Input(id="entry-units-input", className="search-input", type="text"),
+                            ]
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Normal range", className="control-label"),
+                                html.Div(
+                                    className="range-pair",
+                                    children=[
+                                        dcc.Input(
+                                            id="entry-range-low", className="search-input",
+                                            type="number", placeholder="low",
+                                        ),
+                                        html.Span("to", className="range-sep"),
+                                        dcc.Input(
+                                            id="entry-range-high", className="search-input",
+                                            type="number", placeholder="high",
+                                        ),
+                                    ],
+                                ),
+                            ]
+                        ),
+                    ],
+                ),
+                html.P(
+                    "Pre-filled from the age and sex reference. Change it only if your "
+                    "lab report says something different.",
+                    className="entry-hint",
+                ),
                 html.P(id="entry-error", className="entry-error"),
                 html.Div(
                     className="modal-actions",

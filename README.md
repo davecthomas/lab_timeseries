@@ -41,6 +41,8 @@ Other columns are ignored.
 
 Press **＋ Add data**, choose the metric, pick a date from the calendar, and enter a value. The dialog shows the test's units and what it measures once a metric is chosen. When exactly one metric is selected in the sidebar, the picker is pre-filled with it.
 
+The units and normal range are pre-filled from the reference for that metric — change them only if your lab report says something different. A range you change is recorded as a deliberate override and draws the band for that metric from then on; one you leave alone is not.
+
 The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
 
 The write is atomic: an interrupted save cannot leave a truncated file behind. Entering a date that already has a result for that metric is refused rather than silently overwriting.
