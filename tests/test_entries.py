@@ -127,8 +127,9 @@ class TestAppendMeasurement:
         reloaded = prepare_tests(load_dataframe(csv_path))["ALT"]
         assert reloaded.values == [25.0, 23.0, 31.0]
         assert reloaded.latest_value == 31.0
-        # The published reference draws the band; the lab's own range is kept.
-        assert reloaded.band == (4.0, 36.0)
+        # These rows carry a range, so that range is the band; the age/sex
+        # reference would only apply if they carried none.
+        assert reloaded.band == (0.0, 50.0)
         assert reloaded.lab_band == (0.0, 50.0)
         assert reloaded.latest_status == "in"
 
@@ -226,38 +227,48 @@ class TestDuplicateGuarantee:
         )
 
 
-class TestRangeOverride:
-    """The dialog pre-fills the reference; a value the user changes is
-    deliberate and must outrank both the reference and the lab."""
+class TestRangePrecedence:
+    """A row carrying a range states the range for that result, so it is the
+    override. The age/sex reference applies only where no row supplied one.
+    How a row arrived carries no weight."""
 
-    def test_entered_range_is_written_and_marked(self, csv_path, metrics):
+    def test_entered_range_is_written(self, csv_path, metrics):
         append_measurement(
             csv_path, metrics, "ALT", "2026-07-28", "31",
             range_low="2", range_high="40", now=NOW,
         )
         row = read(csv_path)[-1]
         assert (row["Range_Low"], row["Range_High"]) == ("2", "40")
-        assert "custom range" in row["Notes"]
 
-    def test_untouched_prefill_is_not_an_override(self, csv_path, metrics):
-        inherited = read(csv_path)[-1]
-        append_measurement(
-            csv_path, metrics, "ALT", "2026-07-28", "31",
-            range_low=inherited["Range_Low"], range_high=inherited["Range_High"], now=NOW,
-        )
-        row = read(csv_path)[-1]
-        assert "custom range" not in row["Notes"]
-        assert prepare_tests(load_dataframe(csv_path))["ALT"].override_band is None
-
-    def test_override_outranks_the_reference(self, csv_path, metrics):
+    def test_a_row_range_outranks_the_reference(self, csv_path, metrics):
         append_measurement(
             csv_path, metrics, "ALT", "2026-07-28", "31",
             range_low="2", range_high="40", now=NOW,
         )
         series = prepare_tests(load_dataframe(csv_path))["ALT"]
-        assert series.override_band == (2.0, 40.0)
-        assert series.reference.band == (4.0, 36.0)  # what it would have used
+        assert series.reference.band == (4.0, 36.0)  # what it would fall back to
         assert series.band == (2.0, 40.0)
+
+    def test_reference_applies_when_no_row_carries_a_range(self, tmp_path):
+        p = tmp_path / "norange.csv"
+        with p.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(HEADER)
+            w.writerow(["2025-10-10", "ALT", "23 U/L", "n/a", "23", "U/L",
+                        "n/a", "n/a", "n/a", "No", "CMP", "lab note", "ALT"])
+        series = prepare_tests(load_dataframe(p))["ALT"]
+        assert series.lab_band is None
+        assert series.band == (4.0, 36.0)
+
+    def test_entry_rows_are_not_a_special_class(self, csv_path, metrics):
+        """A typed row and a lab row with the same range behave identically."""
+        append_measurement(
+            csv_path, metrics, "ALT", "2026-07-28", "31",
+            range_low="0", range_high="50", now=NOW,
+        )
+        series = prepare_tests(load_dataframe(csv_path))["ALT"]
+        assert series.band == (0.0, 50.0)
+        assert "custom" not in read(csv_path)[-1]["Notes"]
 
     def test_entered_units_are_recorded(self, csv_path, metrics):
         append_measurement(
@@ -272,7 +283,3 @@ class TestRangeOverride:
                 range_low="50", range_high="10", now=NOW,
             )
         assert len(read(csv_path)) == len(ROWS)
-
-    def test_range_may_be_left_empty(self, csv_path, metrics):
-        append_measurement(csv_path, metrics, "ALT", "2026-07-28", "31", now=NOW)
-        assert "custom range" not in read(csv_path)[-1]["Notes"]

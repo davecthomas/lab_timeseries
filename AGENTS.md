@@ -36,8 +36,8 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 - The metric for a manual entry is chosen inside the dialog, not required beforehand; gating the button on the sidebar selection left it disabled on load and read as the feature being absent
 - Dash's DataTable ships its own active-cell style (a red wash) and its `state` keys do not cover checkbox-selected rows; both are handled by CSS in `theme.py`, not `style_data_conditional`
 - Manual entries append to the labs CSV atomically (temp file + `os.replace`) and inherit units/range/panel from the metric's latest existing row; `Notes` records provenance
-- Band precedence: a hand-entered override (rows whose `Notes` carry `custom range`) beats the reference, which beats the lab's range. The dialog pre-fills the reference, so only a *changed* value is marked as an override
-- Chart bands come from `reference_ranges.py` (authored, cited, age/sex-aware) and fall back to the lab's range; `MetricSeries.lab_band` keeps what the lab reported. A reference is applied only when `reference_in_units` can reconcile units — applying a cells/µL range to a 10^3/µL value would misread 2.7 as critically low
+- Band precedence: a range carried by the rows wins; the age/sex reference fills in only where no row states one. Rows are uniform — never branch on how a row was created
+- `reference_ranges.py` (authored, cited, age/sex-aware) supplies the fallback band; `MetricSeries.lab_band` is the newest range stated by the rows (`latest_range`, superseding ADR-0002's mode-then-median, which let two old reports outvote the newest). A reference is applied only when `reference_in_units` can reconcile units — applying a cells/µL range to a 10^3/µL value would misread 2.7 as critically low
 - Metric descriptions come from the `Notes` column via `data.describe()`; never generate them
 - Downloads are selection-scoped and window-scoped, and use `dcc.Download` + `dcc.send_string`; filenames carry the export date
 - Analyses are keyed by metric selection + date window (`analyses.selection_key`); the pane shows one only while it matches the current selection
