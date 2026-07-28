@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
-from . import analyses, export, theme
+from . import analyses, entries, export, theme
 from .commentary import CommentaryError, generate_commentary
 from .data import STATUS_HIGH, STATUS_LOW, MetricSeries
 from .layout import (
@@ -22,12 +22,13 @@ from .layout import (
 )
 from .layout import (
     build_layout,
-    build_table_rows,
     render_analysis,
     render_graphs,
     render_index,
+    stat_tiles,
     window_cutoff,
 )
+from .state import AppData
 
 logger = logging.getLogger("lab_timeseries_grapher")
 
@@ -272,14 +273,20 @@ def resolve_selection(
     return list(stored or [])
 
 
-def create_app(metrics: dict[str, MetricSeries]) -> Dash:
-    """Build the Dash app for a prepared set of metric series."""
-    table_rows = build_table_rows(metrics)
+def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
+    """Build the Dash app over reloadable app data.
+
+    Callbacks read `data.metrics` / `data.table_rows` on every invocation
+    rather than closing over them, so a manual entry can reload the CSV and
+    have the charts, sidebar, and tiles pick it up without a restart.
+    """
+    if not isinstance(data, AppData):
+        data = AppData.from_metrics(data)
 
     app = Dash(__name__)
     app.title = "Blood Metrics"
     app.index_string = theme.index_string()
-    app.layout = build_layout(metrics, table_rows)
+    app.layout = build_layout(data.metrics, data.table_rows)
 
     # One callback owns both the row set and the selection: the table's checkbox
     # indices and the stored ids would otherwise chase each other in a cycle.
@@ -294,11 +301,12 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
         Input("select-all", "n_clicks"),
         Input("clear-all", "n_clicks"),
         Input("metric-table", "selected_row_ids"),
+        Input("data-version", "data"),
         State("metric-table", "data"),
         State("selection-store", "data"),
     )
-    def update_table(search, panel, abnormal_only, _select, _clear, selected_row_ids, prev_rows, stored):
-        rows = filter_rows(table_rows, search, panel, abnormal_only or [])
+    def update_table(search, panel, abnormal_only, _select, _clear, selected_row_ids, _version, prev_rows, stored):
+        rows = filter_rows(data.table_rows, search, panel, abnormal_only or [])
         listed_ids = [r["id"] for r in rows]
         prev_visible_ids = [r["id"] for r in prev_rows or []]
 
@@ -314,8 +322,9 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
         Input("selection-store", "data"),
         Input("metric-table", "derived_virtual_data"),
         Input("date-window", "value"),
+        Input("data-version", "data"),
     )
-    def update_graphs(stored, visible_rows, window):
+    def update_graphs(stored, visible_rows, window, _version):
         if not stored:
             return [
                 html.Div(
@@ -332,8 +341,8 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
             ]
 
         ordered = selection_order(stored, visible_rows)
-        cutoff = window_cutoff(metrics, window or "all")
-        rendered = render_graphs(metrics, ordered, cutoff)
+        cutoff = window_cutoff(data.metrics, window or "all")
+        rendered = render_graphs(data.metrics, ordered, cutoff)
         if not rendered:
             logger.warning("No graphs rendered for selection: %s", ", ".join(stored))
         return rendered
@@ -408,7 +417,7 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
             active=active,
             visible=visible,
             run_analysis=lambda names, win: generate_commentary(
-                metrics, names, window_cutoff(metrics, win or "all")
+                data.metrics, names, window_cutoff(data.metrics, win or "all")
             ),
             now=datetime.now,
         )
@@ -455,6 +464,79 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
         )
 
     @app.callback(
+        Output("entry-open", "disabled"),
+        Output("entry-open", "title"),
+        Input("selection-store", "data"),
+    )
+    def gate_entry(stored):
+        n = len(stored or [])
+        if n != 1:
+            return True, "Select exactly one metric to add a result to"
+        return False, f"Add a result to {stored[0]}"
+
+    # One owner for the dialog: opening, cancelling and saving all move the
+    # same pieces, and a failed save must leave the dialog up with its reason.
+    @app.callback(
+        Output("entry-modal", "style"),
+        Output("entry-metric", "children"),
+        Output("entry-units", "children"),
+        Output("entry-description", "children"),
+        Output("entry-error", "children"),
+        Output("data-version", "data"),
+        Output("entry-value", "value"),
+        Input("entry-open", "n_clicks"),
+        Input("entry-cancel", "n_clicks"),
+        Input("entry-save", "n_clicks"),
+        State("selection-store", "data"),
+        State("entry-date", "date"),
+        State("entry-value", "value"),
+        State("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def entry_dialog_flow(_open, _cancel, _save, stored, when, value, version):
+        trigger = ctx.triggered_id
+        selected = (stored or [None])[0] if len(stored or []) == 1 else None
+        shown = {"display": "flex"}
+        hidden = {"display": "none"}
+
+        if trigger == "entry-open":
+            series = data.metrics.get(selected) if selected else None
+            return (
+                shown,
+                selected or "",
+                series.units if series else "",
+                series.description if series else "",
+                "",
+                no_update,
+                None,
+            )
+
+        if trigger == "entry-cancel":
+            return hidden, no_update, no_update, no_update, "", no_update, None
+
+        try:
+            entries.append_measurement(data.csv_path, data.metrics, selected, when, value)
+        except entries.EntryError as exc:
+            return shown, no_update, no_update, no_update, str(exc), no_update, no_update
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Failed to append manual entry")
+            return (
+                shown, no_update, no_update, no_update,
+                f"Could not save: {exc}", no_update, no_update,
+            )
+
+        data.reload()
+        return hidden, no_update, no_update, no_update, "", (version or 0) + 1, None
+
+    @app.callback(
+        Output("stat-tiles", "children"),
+        Input("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def refresh_tiles(_version):
+        return stat_tiles(data.metrics).children
+
+    @app.callback(
         Output("export-csv", "disabled"),
         Output("export-csv", "title"),
         Input("selection-store", "data"),
@@ -476,8 +558,8 @@ def create_app(metrics: dict[str, MetricSeries]) -> Dash:
         ordered = selection_order(stored or [], visible_rows)
         if not ordered:
             return no_update
-        cutoff = window_cutoff(metrics, window or "all")
-        text = export.metrics_csv(metrics, ordered, cutoff)
+        cutoff = window_cutoff(data.metrics, window or "all")
+        text = export.metrics_csv(data.metrics, ordered, cutoff)
         logger.info("Exporting %d metric(s) as CSV", len(ordered))
         return dcc.send_string(text, export.csv_filename(datetime.now()))
 

@@ -211,8 +211,145 @@ body {
     color: #ffffff;
     background: rgba(57, 135, 229, 0.15);
 }
-.ai-button {
+.add-button {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #c3c2b7;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+}
+.add-button:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+.add-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.add-icon { font-size: 0.8rem; line-height: 1; }
+.entry-eyebrow {
+    font-size: 0.7rem;
+    color: #898781;
+    margin: 0 0 0.25rem;
+}
+.entry-metric {
+    font-size: 1.25rem;
+    font-weight: 650;
+    color: #ffffff;
+    margin: 0 0 0.15rem;
+    letter-spacing: -0.01em;
+}
+.entry-units {
+    font-size: 0.78rem;
+    color: #898781;
+    margin: 0 0 0.5rem;
+}
+.entry-units:empty { margin-bottom: 0.3rem; }
+.entry-description {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: #c3c2b7;
+    margin: 0 0 1.1rem;
+    padding-left: 0.7rem;
+    border-left: 2px solid #3987e5;
+}
+.entry-description:empty { display: none; }
+.card-description {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: #898781;
+    margin: 0 0 0.5rem;
+}
+/* Two equal columns, labels above both fields, controls the same height. */
+.entry-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 0.4rem;
+}
+.entry-fields .control-label {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+.entry-fields .search-input {
+    width: 100%;
+    height: 2.35rem;
+}
+.entry-error {
+    min-height: 1.1rem;
+    margin: 0.4rem 0 0.9rem;
+    font-size: 0.8rem;
+    color: #d03b3b;
+}
+
+/* The date picker renders four nested wrappers; each needs to fill the
+   column so it lines up with the value field beside it. */
+.entry-date,
+.entry-date .SingleDatePicker,
+.entry-date .SingleDatePickerInput,
+.entry-date .DateInput { width: 100%; display: block; }
+.entry-date .SingleDatePickerInput {
+    background: #1a1a19;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.entry-date .DateInput_input {
+    width: 100%;
+    height: 2.35rem;
+    background: #1a1a19;
+    color: #ffffff;
+    border: none;
+    border-bottom: none;
+    padding: 0 0.6rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.entry-date .DateInput_input::placeholder { color: #898781; }
+.entry-date .DateInput_input__focused { background: #1a1a19; }
+.entry-date .SingleDatePickerInput_clearDate {
+    margin: 0 0.3rem 0 0;
+    padding: 0.25rem;
+    border-radius: 6px;
+}
+.entry-date .SingleDatePickerInput_clearDate:hover { background: rgba(255, 255, 255, 0.10); }
+.entry-date .SingleDatePickerInput_clearDate svg { fill: #898781; }
+
+/* The portal renders at z-index 1, which puts it *behind* the dialog that
+   opened it (.modal-backdrop is 100). Without this the calendar is present
+   in the DOM but invisible, and the field reads as a dead text box. */
+.SingleDatePicker_picker__portal { z-index: 400 !important; }
+.SingleDatePicker_picker__portal > .DayPicker_portal__horizontal { z-index: 401; }
+
+/* Calendar chrome. Not scoped to .entry-date: with_portal renders the
+   calendar at the document root, outside this component's subtree. */
+.DayPicker, .DayPicker__withBorder,
+.CalendarMonth, .CalendarMonthGrid, .DayPicker_weekHeader,
+.DayPickerNavigation_button__default {
+    background: #1a1a19 !important;
+    color: #ffffff;
+    border-color: #2c2c2a !important;
+}
+.DayPicker__withBorder { border-radius: 12px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55); }
+.CalendarMonth_caption, .DayPicker_weekHeader { color: #ffffff; }
+.CalendarMonth_caption strong { font-weight: 600; }
+.CalendarDay__default {
+    background: #1a1a19;
+    border-color: #2c2c2a;
+    color: #c3c2b7;
+}
+.CalendarDay__default:hover { background: rgba(57, 135, 229, 0.28); color: #ffffff; }
+.CalendarDay__selected, .CalendarDay__selected:hover { background: #3987e5; color: #ffffff; }
+.CalendarDay__blocked_out_of_range,
+.CalendarDay__blocked_out_of_range:hover { color: #55534e; background: #141413; }
+.DayPickerNavigation_svg__horizontal { fill: #c3c2b7; }
+.DayPicker_portal__horizontal { background: #1a1a19; }
+/* react-dates' teal keyboard-shortcuts badge: off-theme and unexplained. */
+.DayPickerKeyboardShortcuts_show,
+.DayPickerKeyboardShortcuts_show__bottomRight { display: none; }
+.ai-button {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;

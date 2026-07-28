@@ -7,6 +7,8 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - Per-metric time-series charts with the normal range shaded and out-of-range points marked (▲ above, ▼ below)
 - Summary tiles: metrics tracked, lab draws, latest draw, out-of-range count
 - Metric list with latest value, draw date, and in/out-of-range status
+- A plain-language description on each chart saying what that test measures
+- **Add data** — record a new result for a metric; the chart, list, and tiles update immediately
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
 - **Export CSV** — downloads the selected metrics as `blood-metrics-YYYY-MM-DD.csv`
@@ -34,6 +36,14 @@ By default the app loads `data/labs_results.csv`. If that name is absent and `da
 - `Panel` — groups metrics for the panel filter
 
 Other columns are ignored.
+
+## Adding a result
+
+Select exactly one metric and press **＋ Add data**. The dialog names the test, its units, and what it measures, then takes a date from a calendar and a value.
+
+The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
+
+The write is atomic: an interrupted save cannot leave a truncated file behind. Entering a date that already has a result for that metric is refused rather than silently overwriting.
 
 ## Exporting data
 
@@ -126,6 +136,8 @@ Code layout (`src/lab_timeseries_grapher/`):
 | `commentary.py` | Prompt assembly and the Claude call for AI commentary |
 | `analyses.py` | Session-held analyses: identity by selection, index, markdown export |
 | `export.py` | CSV export of the metric data in view |
+| `entries.py` | Manual result entry appended to the labs CSV |
+| `state.py` | Reloadable app data, so an entry appears without a restart |
 | `app.py` | App factory and callbacks |
 | `cli.py` | Command-line entry point |
 
@@ -136,3 +148,4 @@ Python 3.11–3.13 is required (`ai-api-unified` sets the floor).
 - The normal-range band uses the most frequent `(Range_Low, Range_High)` pair for the test; with no repeated pair it falls back to the median low/high.
 - A metric's in/out-of-range status compares its most recent numeric value to that band.
 - Rows with an unparseable `Date` or missing `Value_Numeric` are skipped for that chart; other rows still plot.
+- Chart descriptions come from the CSV's `Notes` column, with panel prefixes and reference-range boilerplate stripped. 134 of 166 metrics have one; the rest show no description rather than an invented one.

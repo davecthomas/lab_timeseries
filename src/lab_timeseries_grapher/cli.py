@@ -9,13 +9,8 @@ import os
 from dash import exceptions
 
 from .app import create_app
-from .data import (
-    data_dir,
-    load_dataframe,
-    prepare_tests,
-    resolve_csv_path,
-    validate_schema,
-)
+from .data import data_dir, resolve_csv_path
+from .state import AppData
 
 logger = logging.getLogger("lab_timeseries_grapher")
 
@@ -64,16 +59,14 @@ def main() -> None:
 
     logger.info("Resolved CSV path: %s", csv_path)
 
-    df = load_dataframe(csv_path)
-    validate_schema(df)
-
-    metrics = prepare_tests(df)
-    if not metrics:
+    # AppData keeps the CSV path so a manual entry can reload without a restart.
+    app_data = AppData.from_csv(csv_path)
+    if not app_data.metrics:
         logger.error("CSV yielded no plottable rows after preprocessing")
         raise SystemExit("No plottable rows were found in the CSV.")
-    logger.info("Prepared %d metrics for display", len(metrics))
+    logger.info("Prepared %d metrics for display", len(app_data.metrics))
 
-    app = create_app(metrics)
+    app = create_app(app_data)
 
     try:
         logger.info("Starting Dash server on %s:%s (debug=%s)", args.host, args.port, args.debug)
