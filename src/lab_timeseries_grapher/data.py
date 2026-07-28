@@ -70,6 +70,41 @@ def most_common_range(
     return None
 
 
+BOILERPLATE = ("relative risk", "reference range", "manually entered")
+
+
+def clean_note(note: str) -> str:
+    """Pull the human description out of one Notes cell.
+
+    Notes arrive in several shapes: a bare description, a panel prefix plus
+    description ("Liver — Liver-specific enzyme…"), or reference-range
+    boilerplate with the description appended after an em dash. Segments are
+    split on the em dash, boilerplate is dropped, and the most substantial
+    remaining segment wins.
+    """
+    text = " ".join(str(note).split())
+    segments = [s.strip(" .;") for s in text.split("—")]
+    useful = [
+        s
+        for s in segments
+        if s and not any(s.lower().startswith(prefix) for prefix in BOILERPLATE)
+    ]
+    return max(useful, key=len) if useful else ""
+
+
+def describe(series: pd.Series) -> str:
+    """The most common description across a test's rows."""
+    notes = [
+        clean_note(n)
+        for n in series
+        if str(n).strip().lower() not in {"", "n/a", "nan"}
+    ]
+    notes = [n for n in notes if n]
+    if not notes:
+        return ""
+    return Counter(notes).most_common(1)[0][0]
+
+
 def mode_str(series: pd.Series) -> str:
     """Return the most common non-empty/non-'n/a' string in a column."""
     vals = [str(u).strip() for u in series if str(u).strip().lower() not in {"", "n/a", "nan"}]
@@ -89,6 +124,7 @@ class MetricSeries:
     band: tuple[float, float] | None
     units: str
     panel: str
+    description: str = ""  # what the test measures, from the CSV's Notes
 
     @property
     def last_date(self) -> pd.Timestamp:
@@ -125,6 +161,7 @@ def prepare_tests(df: pd.DataFrame) -> dict[str, MetricSeries]:
     tests: dict[str, MetricSeries] = {}
     has_value_col = "Value" in df.columns
     has_panel_col = "Panel" in df.columns
+    has_notes_col = "Notes" in df.columns
 
     for test_name, sub in df.groupby("Test Name"):
         dfp = sub.copy()
@@ -152,6 +189,7 @@ def prepare_tests(df: pd.DataFrame) -> dict[str, MetricSeries]:
             band=most_common_range(dfp["Range_Low"], dfp["Range_High"]),
             units=mode_str(dfp["Units"]),
             panel=mode_str(dfp["Panel"]) if has_panel_col else "",
+            description=describe(dfp["Notes"]) if has_notes_col else "",
         )
 
         logger.debug(

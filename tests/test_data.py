@@ -8,7 +8,9 @@ from lab_timeseries_grapher.data import (
     STATUS_LOW,
     STATUS_UNKNOWN,
     MetricSeries,
+    clean_note,
     coerce_float,
+    describe,
     mode_str,
     most_common_range,
     prepare_tests,
@@ -177,3 +179,61 @@ class TestValidateSchema:
     def test_exits_on_missing_columns(self):
         with pytest.raises(SystemExit, match="Range_High"):
             validate_schema(pd.DataFrame(columns=["Date", "Test Name"]))
+
+
+class TestCleanNote:
+    def test_plain_description_passes_through(self):
+        assert clean_note("Liver-specific enzyme; injury to liver cells") == (
+            "Liver-specific enzyme; injury to liver cells"
+        )
+
+    def test_panel_prefix_is_dropped(self):
+        assert clean_note("Liver — Liver-specific enzyme; injury to liver cells") == (
+            "Liver-specific enzyme; injury to liver cells"
+        )
+
+    def test_reference_range_boilerplate_is_dropped(self):
+        note = "Reference Range: >6729 nmol/L. — Protective cholesterol that helps clear arteries"
+        assert clean_note(note) == "Protective cholesterol that helps clear arteries"
+
+    def test_relative_risk_boilerplate_is_dropped(self):
+        note = "Relative Risk: Optimal <1138; Moderate 1138-1409. — Atherogenic cholesterol"
+        assert clean_note(note) == "Atherogenic cholesterol"
+
+    def test_our_own_provenance_note_is_not_a_description(self):
+        assert clean_note("Manually entered 2026-07-28") == ""
+
+    def test_newlines_are_collapsed(self):
+        assert clean_note("Relative Risk: x\nReference Range: y. — Real description") == (
+            "Real description"
+        )
+
+    def test_the_most_substantial_segment_wins(self):
+        note = "Infection-fighting capacity; low increases bacterial infection risk — Bacterial cells"
+        assert clean_note(note) == "Infection-fighting capacity; low increases bacterial infection risk"
+
+    def test_empty_note(self):
+        assert clean_note("") == ""
+
+
+class TestDescribe:
+    def test_most_common_description_wins(self):
+        s = pd.Series(["Liver enzyme", "Liver enzyme", "Something else entirely here"])
+        assert describe(s) == "Liver enzyme"
+
+    def test_placeholders_are_ignored(self):
+        assert describe(pd.Series(["n/a", "", "nan", "Real description"])) == "Real description"
+
+    def test_no_usable_notes(self):
+        assert describe(pd.Series(["n/a", "", "Manually entered 2026-07-28"])) == ""
+
+
+class TestPrepareTestsDescription:
+    def test_description_reaches_the_metric(self):
+        df = labs_frame([["2024-01-01", "ALT", "25", "25", "U/L", "0", "50", "CMP"]])
+        df["Notes"] = ["Liver — Liver-specific enzyme"]
+        assert prepare_tests(df)["ALT"].description == "Liver-specific enzyme"
+
+    def test_missing_notes_column_is_fine(self):
+        df = labs_frame([["2024-01-01", "ALT", "25", "25", "U/L", "0", "50", "CMP"]])
+        assert prepare_tests(df)["ALT"].description == ""

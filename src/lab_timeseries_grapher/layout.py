@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 from dash import dash_table, dcc, html
 
@@ -65,6 +67,7 @@ def stat_tiles(metrics: dict[str, MetricSeries]) -> html.Div:
         return html.Div(className="stat-tile", children=children)
 
     return html.Div(
+        id="stat-tiles",
         className="stat-tiles",
         children=[
             tile("Metrics tracked", str(len(metrics))),
@@ -87,10 +90,14 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
         head.append(html.Span(series.units, className="units"))
     head.append(html.Span(latest_children, className="latest"))
 
+    body: list = [html.Div(className="card-head", children=head)]
+    if series.description:
+        body.append(html.P(series.description, className="card-description"))
+
     return html.Div(
         className="chart-card",
         children=[
-            html.Div(className="card-head", children=head),
+            *body,
             dcc.Graph(
                 figure=make_figure(series, cutoff),
                 config={
@@ -292,6 +299,73 @@ def ai_error(message: str) -> list:
     ]
 
 
+def entry_dialog() -> html.Div:
+    """Manual measurement entry for the one selected metric."""
+    return html.Div(
+        id="entry-modal",
+        className="modal-backdrop",
+        style={"display": "none"},
+        children=html.Div(
+            className="modal-card",
+            children=[
+                html.P("Add a result", className="entry-eyebrow"),
+                html.H2(id="entry-metric", className="entry-metric"),
+                html.P(id="entry-units", className="entry-units"),
+                html.P(id="entry-description", className="entry-description"),
+                html.Div(
+                    className="entry-fields",
+                    children=[
+                        html.Div(
+                            [
+                                html.Label("Date", className="control-label", htmlFor="entry-date"),
+                                # with_portal opens the calendar as a centred
+                                # overlay: it reads as a picker rather than a
+                                # text field, and cannot be clipped by the
+                                # dialog it sits inside.
+                                dcc.DatePickerSingle(
+                                    id="entry-date",
+                                    display_format="MMM D, YYYY",
+                                    placeholder="Pick a date",
+                                    className="entry-date",
+                                    with_portal=True,
+                                    clearable=True,
+                                    max_date_allowed=date.today(),
+                                    initial_visible_month=date.today(),
+                                ),
+                            ]
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Value", className="control-label", htmlFor="entry-value"),
+                                dcc.Input(
+                                    id="entry-value",
+                                    className="search-input",
+                                    type="number",
+                                    debounce=False,
+                                    placeholder="e.g. 4.6",
+                                ),
+                            ]
+                        ),
+                    ],
+                ),
+                html.P(id="entry-error", className="entry-error"),
+                html.Div(
+                    className="modal-actions",
+                    children=[
+                        html.Button("Cancel", id="entry-cancel", className="modal-button", n_clicks=0),
+                        html.Button(
+                            "Save result",
+                            id="entry-save",
+                            className="modal-button modal-button-primary",
+                            n_clicks=0,
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
 def consent_dialog(model_name: str) -> html.Div:
     """First-run confirmation before any lab values leave the machine."""
     return html.Div(
@@ -403,6 +477,9 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             dcc.Store(id="ai-visible", storage_type="session", data=False),
             dcc.Store(id="ai-run-count", data=0),
             dcc.Store(id="ai-last-run", data=0),
+            # Bumped when a manual entry lands, so the table, tiles and charts
+            # re-read the reloaded data.
+            dcc.Store(id="data-version", data=0),
             dcc.Download(id="ai-download"),
             dcc.Download(id="metrics-download"),
             html.Div(
@@ -415,6 +492,12 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                         options=DATE_WINDOWS,
                         value="all",
                         inline=True,
+                    ),
+                    html.Button(
+                        [html.Span("＋", className="add-icon"), "Add data"],
+                        id="entry-open",
+                        className="add-button",
+                        n_clicks=0,
                     ),
                     html.Button(
                         [html.Span("✦", className="ai-icon"), "Analysis with AI"],
@@ -464,5 +547,6 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             ),
             html.Div(className="app-shell", children=[sidebar, content]),
             consent_dialog(configured_model_name()),
+            entry_dialog(),
         ]
     )
