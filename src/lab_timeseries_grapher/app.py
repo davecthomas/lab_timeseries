@@ -29,6 +29,7 @@ from .layout import (
     window_cutoff,
 )
 from .state import AppData
+from .synonyms import format_synonyms
 
 logger = logging.getLogger("lab_timeseries_grapher")
 
@@ -467,13 +468,14 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Output("entry-metric", "children"),
         Output("entry-units", "children"),
         Output("entry-description", "children"),
+        Output("entry-aka", "children"),
         Input("entry-metric-select", "value"),
     )
     def describe_chosen_metric(name):
         series = data.metrics.get(name) if name else None
         if series is None:
-            return "", "", ""
-        return series.name, series.units, series.description
+            return "", "", "", ""
+        return series.name, series.units, series.description, format_synonyms(series.name)
 
     # One owner for the dialog: opening, cancelling and saving all move the
     # same pieces, and a failed save must leave the dialog up with its reason.

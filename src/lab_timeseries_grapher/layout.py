@@ -12,6 +12,7 @@ from .analyses import window_label
 from .commentary import configured_model_name
 from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
 from .figures import make_figure
+from .synonyms import format_synonyms
 
 INITIAL_METRIC_COUNT = 10
 
@@ -93,6 +94,9 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
     body: list = [html.Div(className="card-head", children=head)]
     if series.description:
         body.append(html.P(series.description, className="card-description"))
+    aka = format_synonyms(series.name)
+    if aka:
+        body.append(html.P(aka, className="card-aka"))
 
     return html.Div(
         className="chart-card",
@@ -332,6 +336,7 @@ def entry_dialog(metric_names: list[str]) -> html.Div:
                 html.H2(id="entry-metric", className="entry-metric"),
                 html.P(id="entry-units", className="entry-units"),
                 html.P(id="entry-description", className="entry-description"),
+                html.P(id="entry-aka", className="entry-aka"),
                 html.Div(
                     className="entry-fields",
                     children=[

@@ -332,6 +332,20 @@ body {
     border-left: 2px solid #3987e5;
 }
 .entry-description:empty { display: none; }
+.card-aka {
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #898781;
+    margin: -0.25rem 0 0.5rem;
+    font-style: italic;
+}
+.entry-aka {
+    font-size: 0.75rem;
+    color: #898781;
+    margin: -0.7rem 0 1.1rem;
+    font-style: italic;
+}
+.entry-aka:empty { display: none; }
 .card-description {
     font-size: 0.78rem;
     line-height: 1.45;
