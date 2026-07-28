@@ -123,6 +123,19 @@ def append_measurement(
     matching = [r for r in rows[1:] if len(r) == len(header) and r[idx["Test Name"]] == name]
     if not matching:
         raise EntryError(f"No existing rows for {name!r} to take units and range from.")
+
+    # Authoritative duplicate check, against the file rather than the caller's
+    # metrics. validate_entry only sees rows that survived parsing, and it sees
+    # whatever snapshot the caller happens to hold; neither is a guarantee.
+    # This read is the same one that finds the template, so it costs nothing.
+    for existing in matching:
+        stamp = pd.to_datetime(existing[idx["Date"]], errors="coerce")
+        if pd.notna(stamp) and stamp.normalize() == when:
+            raise EntryError(
+                f"{name} already has a result for {when:%Y-%m-%d}. "
+                "Pick another date, or edit the CSV directly to change it."
+            )
+
     template = dict(zip(header, matching[-1]))
 
     rows.append(

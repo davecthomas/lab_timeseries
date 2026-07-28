@@ -177,3 +177,48 @@ class TestAppDataReload:
         data = AppData.from_metrics(metrics)
         data.reload()
         assert data.metrics["ALT"].values == [25.0, 23.0]
+
+
+class TestDuplicateGuarantee:
+    """The check must not depend on the caller holding fresh metrics, nor on
+    the conflicting row having survived parsing."""
+
+    def test_repeat_save_without_reloading_metrics_is_refused(self, csv_path, metrics):
+        # The UI reloads after each save; the guarantee must not rely on it.
+        append_measurement(csv_path, metrics, "ALT", "2026-02-05", "31", now=NOW)
+        with pytest.raises(EntryError, match="already has a result"):
+            append_measurement(csv_path, metrics, "ALT", "2026-02-05", "99", now=NOW)
+        dates = [r["Date"] for r in read(csv_path) if r["Test Name"] == "ALT"]
+        assert dates.count("2026-02-05") == 1
+
+    def test_conflicting_row_invisible_to_the_parser_is_still_refused(self, csv_path, metrics):
+        # A row whose value will not parse is dropped by prepare_tests, so the
+        # in-memory series cannot see the clash.
+        with csv_path.open("a", newline="", encoding="utf-8") as fh:
+            csv.writer(fh).writerow(
+                ["2024-05-05", "ALT", "pending", "n/a", "n/a", "U/L", "0 - 50 U/L",
+                 "0", "50", "No", "CMP", "lab note", "ALT"]
+            )
+        metrics = prepare_tests(load_dataframe(csv_path))
+        assert pd.Timestamp("2024-05-05") not in metrics["ALT"].dates
+
+        with pytest.raises(EntryError, match="already has a result"):
+            append_measurement(csv_path, metrics, "ALT", "2024-05-05", "31", now=NOW)
+        dates = [r["Date"] for r in read(csv_path) if r["Test Name"] == "ALT"]
+        assert dates.count("2024-05-05") == 1
+
+    def test_time_component_still_collides_with_the_same_day(self, csv_path, metrics):
+        with pytest.raises(EntryError, match="already has a result"):
+            append_measurement(csv_path, metrics, "ALT", "2025-10-10T14:30:00", "31", now=NOW)
+
+    def test_same_date_on_a_different_metric_is_allowed(self, csv_path, metrics):
+        with csv_path.open("a", newline="", encoding="utf-8") as fh:
+            csv.writer(fh).writerow(
+                ["2025-10-10", "AST", "30 U/L", "n/a", "30", "U/L", "5 - 45 U/L",
+                 "5", "45", "No", "CMP", "lab note", "AST"]
+            )
+        metrics = prepare_tests(load_dataframe(csv_path))
+        append_measurement(csv_path, metrics, "AST", "2026-06-06", "33", now=NOW)
+        assert any(
+            r["Test Name"] == "AST" and r["Date"] == "2026-06-06" for r in read(csv_path)
+        )
