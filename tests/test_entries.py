@@ -127,7 +127,9 @@ class TestAppendMeasurement:
         reloaded = prepare_tests(load_dataframe(csv_path))["ALT"]
         assert reloaded.values == [25.0, 23.0, 31.0]
         assert reloaded.latest_value == 31.0
-        assert reloaded.band == (0.0, 50.0)
+        # The published reference draws the band; the lab's own range is kept.
+        assert reloaded.band == (4.0, 36.0)
+        assert reloaded.lab_band == (0.0, 50.0)
         assert reloaded.latest_status == "in"
 
     def test_out_of_range_entry_is_flagged(self, csv_path, metrics):
@@ -222,3 +224,55 @@ class TestDuplicateGuarantee:
         assert any(
             r["Test Name"] == "AST" and r["Date"] == "2026-06-06" for r in read(csv_path)
         )
+
+
+class TestRangeOverride:
+    """The dialog pre-fills the reference; a value the user changes is
+    deliberate and must outrank both the reference and the lab."""
+
+    def test_entered_range_is_written_and_marked(self, csv_path, metrics):
+        append_measurement(
+            csv_path, metrics, "ALT", "2026-07-28", "31",
+            range_low="2", range_high="40", now=NOW,
+        )
+        row = read(csv_path)[-1]
+        assert (row["Range_Low"], row["Range_High"]) == ("2", "40")
+        assert "custom range" in row["Notes"]
+
+    def test_untouched_prefill_is_not_an_override(self, csv_path, metrics):
+        inherited = read(csv_path)[-1]
+        append_measurement(
+            csv_path, metrics, "ALT", "2026-07-28", "31",
+            range_low=inherited["Range_Low"], range_high=inherited["Range_High"], now=NOW,
+        )
+        row = read(csv_path)[-1]
+        assert "custom range" not in row["Notes"]
+        assert prepare_tests(load_dataframe(csv_path))["ALT"].override_band is None
+
+    def test_override_outranks_the_reference(self, csv_path, metrics):
+        append_measurement(
+            csv_path, metrics, "ALT", "2026-07-28", "31",
+            range_low="2", range_high="40", now=NOW,
+        )
+        series = prepare_tests(load_dataframe(csv_path))["ALT"]
+        assert series.override_band == (2.0, 40.0)
+        assert series.reference.band == (4.0, 36.0)  # what it would have used
+        assert series.band == (2.0, 40.0)
+
+    def test_entered_units_are_recorded(self, csv_path, metrics):
+        append_measurement(
+            csv_path, metrics, "ALT", "2026-07-28", "31", units="IU/L", now=NOW,
+        )
+        assert read(csv_path)[-1]["Units"] == "IU/L"
+
+    def test_inverted_range_is_refused(self, csv_path, metrics):
+        with pytest.raises(EntryError, match="must be below"):
+            append_measurement(
+                csv_path, metrics, "ALT", "2026-07-28", "31",
+                range_low="50", range_high="10", now=NOW,
+            )
+        assert len(read(csv_path)) == len(ROWS)
+
+    def test_range_may_be_left_empty(self, csv_path, metrics):
+        append_measurement(csv_path, metrics, "ALT", "2026-07-28", "31", now=NOW)
+        assert "custom range" not in read(csv_path)[-1]["Notes"]

@@ -41,6 +41,8 @@ Other columns are ignored.
 
 Press **＋ Add data**, choose the metric, pick a date from the calendar, and enter a value. The dialog shows the test's units and what it measures once a metric is chosen. When exactly one metric is selected in the sidebar, the picker is pre-filled with it.
 
+The units and normal range are pre-filled from the reference for that metric — change them only if your lab report says something different. A range you change is recorded as a deliberate override and draws the band for that metric from then on; one you leave alone is not.
+
 The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
 
 The write is atomic: an interrupted save cannot leave a truncated file behind. Entering a date that already has a result for that metric is refused rather than silently overwriting.
@@ -142,6 +144,19 @@ Code layout (`src/lab_timeseries_grapher/`):
 | `cli.py` | Command-line entry point |
 
 Python 3.11–3.13 is required (`ai-api-unified` sets the floor).
+
+## Reference ranges
+
+Bands are drawn from published population reference ranges selected for an age and sex, so a series spanning several labs is judged against one consistent scale. The range your own lab reported is kept and shown beside it on each chart.
+
+```bash
+make run                       # defaults to age 60, male
+poetry run lab-timeseries-grapher --age 72 --sex female
+```
+
+Ranges live in `src/lab_timeseries_grapher/reference_ranges.py`, one entry per analyte with the source it came from (MedlinePlus, StatPearls, NCEP ATP III, Mayo Clinic Labs, ADA). PSA and ESR are banded by age; hemoglobin, hematocrit and RBC by sex.
+
+**These are authored from published sources, not from your lab**, and published sources disagree — free T4 is 0.9–1.7 ng/dL at Mayo and 0.70–1.48 on one report in this dataset. A range is applied only when its units reconcile with the metric's; where they cannot, or where no consensus interval exists (particle assays, calculated ratios), the lab's own range stands.
 
 ## Notes
 

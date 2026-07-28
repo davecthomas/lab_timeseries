@@ -332,6 +332,30 @@ body {
     border-left: 2px solid #3987e5;
 }
 .entry-description:empty { display: none; }
+.card-aka {
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #898781;
+    margin: -0.25rem 0 0.5rem;
+    font-style: italic;
+}
+.entry-aka {
+    font-size: 0.75rem;
+    color: #898781;
+    margin: -0.7rem 0 1.1rem;
+    font-style: italic;
+}
+.entry-aka:empty { display: none; }
+.card-range {
+    font-size: 0.72rem;
+    color: #898781;
+    margin: 0 0 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.card-range .range-ref { color: #c3c2b7; }
+.card-range .range-lab::before { content: "· "; }
 .card-description {
     font-size: 0.78rem;
     line-height: 1.45;
@@ -352,6 +376,14 @@ body {
 .entry-fields .search-input {
     width: 100%;
     height: 2.35rem;
+}
+.range-pair { display: flex; align-items: center; gap: 0.4rem; }
+.range-pair .search-input { min-width: 0; }
+.range-sep { font-size: 0.78rem; color: #898781; }
+.entry-hint {
+    font-size: 0.72rem;
+    color: #898781;
+    margin: 0.1rem 0 0;
 }
 .entry-error {
     min-height: 1.1rem;

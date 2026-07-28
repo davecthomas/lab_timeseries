@@ -26,6 +26,9 @@ from .data import MetricSeries
 logger = logging.getLogger("lab_timeseries_grapher")
 
 NOTE_PREFIX = "Manually entered"
+# Appended only when the entered range differs from what the row inherited,
+# so an untouched pre-filled range never masquerades as a deliberate override.
+CUSTOM_RANGE_NOTE = "custom range"
 
 
 class EntryError(ValueError):
@@ -86,6 +89,7 @@ def build_row(
     when: pd.Timestamp,
     number: float,
     entered_on: datetime,
+    custom_range: bool = False,
 ) -> list[str]:
     """A CSV row inheriting the metric's metadata from an existing row."""
     row = dict(template)
@@ -93,10 +97,18 @@ def build_row(
     row["Test Name"] = name
     row["Value"] = format_value(number, template.get("Units", ""))
     row["Value_Numeric"] = f"{number:g}"
-    row["Notes"] = f"{NOTE_PREFIX} {entered_on:%Y-%m-%d}"
+    note = f"{NOTE_PREFIX} {entered_on:%Y-%m-%d}"
+    row["Notes"] = f"{note} · {CUSTOM_RANGE_NOTE}" if custom_range else note
     if "Value_Prefix" in row:
         row["Value_Prefix"] = "n/a"
     return [row.get(col, "") for col in header]
+
+
+def parse_bound(value: str | float | None) -> float | None:
+    """A reference bound, or None when the field was left empty."""
+    if value in (None, ""):
+        return None
+    return parse_value(value)
 
 
 def append_measurement(
@@ -106,9 +118,17 @@ def append_measurement(
     when: str | date | None,
     value: str | float | None,
     *,
+    units: str | None = None,
+    range_low: str | float | None = None,
+    range_high: str | float | None = None,
     now: datetime | None = None,
 ) -> pd.Timestamp:
-    """Validate and append one measurement. Returns the stored date."""
+    """Validate and append one measurement. Returns the stored date.
+
+    `units` and the range bounds come from the dialog pre-filled with the
+    reference for this metric, so a lab reporting a different interval can be
+    recorded as it actually was rather than inheriting a stale one.
+    """
     name, when, number = validate_entry(metrics, name, when, value)
 
     with csv_path.open(newline="", encoding="utf-8") as fh:
@@ -136,12 +156,33 @@ def append_measurement(
                 "Pick another date, or edit the CSV directly to change it."
             )
 
+    low, high = parse_bound(range_low), parse_bound(range_high)
+    if low is not None and high is not None and low >= high:
+        raise EntryError(f"The range low ({low:g}) must be below the high ({high:g}).")
+
     template = dict(zip(header, matching[-1]))
+    inherited = (template.get("Range_Low", ""), template.get("Range_High", ""))
+    if units:
+        template["Units"] = units.strip()
+    if low is not None:
+        template["Range_Low"] = f"{low:g}"
+    if high is not None:
+        template["Range_High"] = f"{high:g}"
+    custom = (low is not None or high is not None) and (
+        (template.get("Range_Low", ""), template.get("Range_High", "")) != inherited
+    )
+    if low is not None or high is not None:
+        template["Typical range"] = (
+            f"{low:g} - {high:g} {template.get('Units', '')}".strip()
+            if low is not None and high is not None
+            else template.get("Typical range", "")
+        )
 
     rows.append(
         build_row(
             header, template, name=name, when=when, number=number,
             entered_on=now or datetime.now(),
+            custom_range=custom,
         )
     )
 

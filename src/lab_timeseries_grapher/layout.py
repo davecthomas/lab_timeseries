@@ -12,6 +12,8 @@ from .analyses import window_label
 from .commentary import configured_model_name
 from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
 from .figures import make_figure
+from .reference_ranges import describe_reference
+from .synonyms import format_synonyms
 
 INITIAL_METRIC_COUNT = 10
 
@@ -93,6 +95,25 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
     body: list = [html.Div(className="card-head", children=head)]
     if series.description:
         body.append(html.P(series.description, className="card-description"))
+    aka = format_synonyms(series.name)
+    if aka:
+        body.append(html.P(aka, className="card-aka"))
+
+    ref = getattr(series, "reference", None)
+    if ref is not None:
+        parts: list = [html.Span(f"Range {describe_reference(ref)}", className="range-ref")]
+        # Say so when the lab that ran the sample disagreed with the reference.
+        if series.lab_band and series.lab_band != series.band:
+            low, high = series.lab_band
+            parts.append(
+                html.Span(f"your lab reported {low:g}–{high:g}", className="range-lab")
+            )
+        body.append(html.P(parts, className="card-range"))
+    elif series.lab_band:
+        low, high = series.lab_band
+        body.append(
+            html.P(f"Range {low:g}–{high:g} {series.units} (your lab)", className="card-range")
+        )
 
     return html.Div(
         className="chart-card",
@@ -332,6 +353,7 @@ def entry_dialog(metric_names: list[str]) -> html.Div:
                 html.H2(id="entry-metric", className="entry-metric"),
                 html.P(id="entry-units", className="entry-units"),
                 html.P(id="entry-description", className="entry-description"),
+                html.P(id="entry-aka", className="entry-aka"),
                 html.Div(
                     className="entry-fields",
                     children=[
@@ -367,6 +389,41 @@ def entry_dialog(metric_names: list[str]) -> html.Div:
                             ]
                         ),
                     ],
+                ),
+                html.Div(
+                    className="entry-fields entry-range",
+                    children=[
+                        html.Div(
+                            [
+                                html.Label("Units", className="control-label", htmlFor="entry-units-input"),
+                                dcc.Input(id="entry-units-input", className="search-input", type="text"),
+                            ]
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Normal range", className="control-label"),
+                                html.Div(
+                                    className="range-pair",
+                                    children=[
+                                        dcc.Input(
+                                            id="entry-range-low", className="search-input",
+                                            type="number", placeholder="low",
+                                        ),
+                                        html.Span("to", className="range-sep"),
+                                        dcc.Input(
+                                            id="entry-range-high", className="search-input",
+                                            type="number", placeholder="high",
+                                        ),
+                                    ],
+                                ),
+                            ]
+                        ),
+                    ],
+                ),
+                html.P(
+                    "Pre-filled from the age and sex reference. Change it only if your "
+                    "lab report says something different.",
+                    className="entry-hint",
                 ),
                 html.P(id="entry-error", className="entry-error"),
                 html.Div(
