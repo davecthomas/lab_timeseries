@@ -26,9 +26,6 @@ STATUS_LOW = "low"
 STATUS_HIGH = "high"
 STATUS_UNKNOWN = "unknown"
 
-# Marks rows written by the entry dialog; see entries.NOTE_PREFIX.
-MANUAL_NOTE = "Manually entered"
-CUSTOM_RANGE_NOTE = "custom range"
 
 
 def coerce_float(x) -> float | None:
@@ -109,6 +106,23 @@ def describe(series: pd.Series) -> str:
     return Counter(notes).most_common(1)[0][0]
 
 
+def latest_range(
+    low_series: pd.Series, high_series: pd.Series
+) -> tuple[float, float] | None:
+    """The range from the most recent row that carries one.
+
+    Rows arrive oldest-first. A newer report supersedes an older one, so the
+    newest stated range is the one a current result is judged against —
+    picking the most *common* range would let two old reports outvote the
+    range that came with the latest draw.
+    """
+    for lo, hi in zip(reversed(list(low_series)), reversed(list(high_series))):
+        low, high = coerce_float(lo), coerce_float(hi)
+        if low is not None and high is not None:
+            return (low, high)
+    return None
+
+
 def mode_str(series: pd.Series) -> str:
     """Return the most common non-empty/non-'n/a' string in a column."""
     vals = [str(u).strip() for u in series if str(u).strip().lower() not in {"", "n/a", "nan"}]
@@ -129,9 +143,8 @@ class MetricSeries:
     units: str
     panel: str
     description: str = ""  # what the test measures, from the CSV's Notes
-    lab_band: tuple[float, float] | None = None  # what this lab reported
+    lab_band: tuple[float, float] | None = None  # a range carried by the rows
     reference: object = None  # reference_ranges.Reference, when one applies
-    override_band: tuple[float, float] | None = None  # entered by hand, wins
 
     @property
     def last_date(self) -> pd.Timestamp:
@@ -197,35 +210,25 @@ def prepare_tests(df: pd.DataFrame, profile=None) -> dict[str, MetricSeries]:
             displays = [f"{n:g}" for n in dfp["Value_Num"]]
 
         units = mode_str(dfp["Units"])
-        lab_band = most_common_range(dfp["Range_Low"], dfp["Range_High"])
+        lab_band = latest_range(dfp["Range_Low"], dfp["Range_High"])
         reference = reference_in_units(reference_for(str(test_name), profile), units)
 
-        # A range the user actually changed in the entry dialog outranks both
-        # the reference and the lab. entries.py marks only those rows, so a
-        # pre-filled range left untouched does not become an override.
-        override_band = None
-        if has_notes_col:
-            notes = dfp["Notes"].astype(str)
-            manual = dfp[notes.str.startswith(MANUAL_NOTE) & notes.str.contains(CUSTOM_RANGE_NOTE)]
-            if not manual.empty:
-                override_band = most_common_range(manual["Range_Low"], manual["Range_High"])
 
         tests[str(test_name)] = MetricSeries(
             name=str(test_name),
             dates=dfp["Date_parsed"].tolist(),
             values=dfp["Value_Num"].astype(float).tolist(),
             display_values=displays,
-            band=(
-                override_band
-                or (reference.band if reference and reference.band else None)
-                or lab_band
-            ),
+            # A row that carries a range states the range for that result, so
+            # it is the override; the age/sex reference fills in only where no
+            # row supplied one. How a row arrived carries no weight — an entry
+            # typed into the dialog is a row like any other.
+            band=lab_band or (reference.band if reference and reference.band else None),
             units=units,
             panel=mode_str(dfp["Panel"]) if has_panel_col else "",
             description=describe(dfp["Notes"]) if has_notes_col else "",
             lab_band=lab_band,
             reference=reference,
-            override_band=override_band,
         )
 
         logger.debug(

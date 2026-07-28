@@ -100,19 +100,22 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
         body.append(html.P(aka, className="card-aka"))
 
     ref = getattr(series, "reference", None)
-    if ref is not None:
-        parts: list = [html.Span(f"Range {describe_reference(ref)}", className="range-ref")]
-        # Say so when the lab that ran the sample disagreed with the reference.
-        if series.lab_band and series.lab_band != series.band:
-            low, high = series.lab_band
+    if series.lab_band:
+        low, high = series.lab_band
+        parts: list = [
+            html.Span(f"Range {low:g}–{high:g} {series.units}".strip(), className="range-ref")
+        ]
+        # The reference is what would apply if these rows carried no range.
+        if ref is not None and ref.band and ref.band != series.lab_band:
             parts.append(
-                html.Span(f"your lab reported {low:g}–{high:g}", className="range-lab")
+                html.Span(f"age/sex reference {describe_reference(ref)}", className="range-lab")
             )
         body.append(html.P(parts, className="card-range"))
-    elif series.lab_band:
-        low, high = series.lab_band
+    elif ref is not None:
         body.append(
-            html.P(f"Range {low:g}–{high:g} {series.units} (your lab)", className="card-range")
+            html.P(
+                f"Range {describe_reference(ref)} (age/sex reference)", className="card-range"
+            )
         )
 
     return html.Div(

@@ -41,7 +41,7 @@ Other columns are ignored.
 
 Press **＋ Add data**, choose the metric, pick a date from the calendar, and enter a value. The dialog shows the test's units and what it measures once a metric is chosen. When exactly one metric is selected in the sidebar, the picker is pre-filled with it.
 
-The units and normal range are pre-filled from the reference for that metric — change them only if your lab report says something different. A range you change is recorded as a deliberate override and draws the band for that metric from then on; one you leave alone is not.
+The units and normal range are pre-filled from the band in use for that metric — change them if your lab report says something different. Whatever range the row ends up with is the range that result is judged against.
 
 The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
 
@@ -147,7 +147,9 @@ Python 3.11–3.13 is required (`ai-api-unified` sets the floor).
 
 ## Reference ranges
 
-Bands are drawn from published population reference ranges selected for an age and sex, so a series spanning several labs is judged against one consistent scale. The range your own lab reported is kept and shown beside it on each chart.
+A row that carries a reference range states the range for that result, so that range draws the band. Where no row supplies one, a published reference range selected for an age and sex is used instead. How a row arrived makes no difference — a result typed into the app is a row like any other.
+
+When rows disagree, the most recent stated range wins: a newer report supersedes an older one.
 
 ```bash
 make run                       # defaults to age 60, male
