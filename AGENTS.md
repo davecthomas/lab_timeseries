@@ -9,6 +9,7 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 |---|---|
 | `src/lab_timeseries_grapher/` | The app package: `data.py` (CSV → `MetricSeries`), `figures.py` (Plotly charts), `layout.py` (Dash layout), `theme.py` (colors/CSS), `commentary.py` (AI prompt + Claude call), `analyses.py` (session-held analyses + export), `export.py` (metric CSV export), `entries.py` (manual entry), `state.py` (reloadable AppData), `app.py` (factory + callbacks), `cli.py` (entry point) |
 | `skills/bloodwork-analysis-helper/` | `SKILL.md` — the system prompt for AI commentary; edit here rather than in Python |
+| `src/lab_timeseries_grapher/ingest.py` | CSV import: column inference and the merge plan |
 | `tests/` | pytest suite for data shaping, figures, prompt assembly, and callback helpers |
 | `data/` | Gitignored lab CSVs — never commit or paste contents; values are personal health data |
 | `.github/workflows/` | CI: ruff + pytest |
@@ -36,6 +37,8 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 - The metric for a manual entry is chosen inside the dialog, not required beforehand; gating the button on the sidebar selection left it disabled on load and read as the feature being absent
 - Dash's DataTable ships its own active-cell style (a red wash) and its `state` keys do not cover checkbox-selected rows; both are handled by CSS in `theme.py`, not `style_data_conditional`
 - Manual entries append to the labs CSV atomically (temp file + `os.replace`) and inherit units/range/panel from the metric's latest existing row; `Notes` records provenance
+- Uploads build a `Plan` first and write nothing until confirmed; on a (test, date) collision the uploaded row wins
+- Pattern-matching Inputs fire when matching components are *created*, not only clicked — guard on `ctx.triggered[0]["value"]` or rendering charts will trip the callback
 - Band precedence: a range carried by the rows wins; the age/sex reference fills in only where no row states one. Rows are uniform — never branch on how a row was created
 - `reference_ranges.py` (authored, cited, age/sex-aware) supplies the fallback band; `MetricSeries.lab_band` is the newest range stated by the rows (`latest_range`, superseding ADR-0002's mode-then-median, which let two old reports outvote the newest). A reference is applied only when `reference_in_units` can reconcile units — applying a cells/µL range to a 10^3/µL value would misread 2.7 as critically low
 - Metric descriptions come from the `Notes` column via `data.describe()`; never generate them

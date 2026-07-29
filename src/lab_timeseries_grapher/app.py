@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
-from . import analyses, entries, export, theme
+from . import analyses, entries, export, ingest, theme
 from .commentary import CommentaryError, generate_commentary
 from .data import STATUS_HIGH, STATUS_LOW, MetricSeries
 from .layout import (
@@ -25,9 +25,11 @@ from .layout import (
     render_analysis,
     render_graphs,
     render_index,
+    render_upload_preview,
     stat_tiles,
     window_cutoff,
 )
+from .reference_ranges import Profile
 from .state import AppData
 from .synonyms import format_synonyms
 
@@ -289,6 +291,27 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
     app.index_string = theme.index_string()
     app.layout = build_layout(data.metrics, data.table_rows)
 
+    # Seed the profile controls from whatever the app was started with.
+    profile = data.profile or Profile()
+    app.layout["profile-age"].value = profile.age
+    app.layout["profile-sex"].value = profile.sex
+
+    @app.callback(
+        Output("data-version", "data", allow_duplicate=True),
+        Input("profile-age", "value"),
+        Input("profile-sex", "value"),
+        State("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def update_profile(age, sex, version):
+        """Re-band every metric for a new age or sex."""
+        if age is None or sex is None:
+            return no_update
+        data.profile = Profile(age=int(age), sex=sex)
+        data.reload()
+        logger.info("Reference profile set to %s, age %s", sex, age)
+        return (version or 0) + 1
+
     # One callback owns both the row set and the selection: the table's checkbox
     # indices and the stored ids would otherwise chase each other in a cycle.
     @app.callback(
@@ -501,6 +524,7 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Output("entry-value", "value"),
         Input("entry-open", "n_clicks"),
         Input("entry-open-sidebar", "n_clicks"),
+        Input({"type": "card-add", "index": ALL}, "n_clicks"),
         Input("entry-cancel", "n_clicks"),
         Input("entry-save", "n_clicks"),
         State("selection-store", "data"),
@@ -514,11 +538,22 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         prevent_initial_call=True,
     )
     def entry_dialog_flow(
-        _open, _open2, _cancel, _save, stored, chosen, when, value, units, low, high, version
+        _open, _open2, _cards, _cancel, _save, stored, chosen, when, value, units, low, high,
+        version,
     ):
         trigger = ctx.triggered_id
         shown = {"display": "flex"}
         hidden = {"display": "none"}
+
+        if isinstance(trigger, dict) and trigger.get("type") == "card-add":
+            # Rendering charts *creates* these buttons, and Dash fires the
+            # callback for newly-matched pattern components. Only a real click
+            # carries a click count, so an appearing button is ignored.
+            clicked = ctx.triggered[0].get("value") if ctx.triggered else None
+            if not clicked:
+                return no_update, no_update, no_update, no_update, no_update
+            # The button lives on a chart, so the metric is unambiguous.
+            return shown, trigger.get("index"), "", no_update, None
 
         if trigger in {"entry-open", "entry-open-sidebar"}:
             # Pre-fill from the selection when it is unambiguous; otherwise
@@ -542,6 +577,87 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
 
         data.reload()
         return hidden, no_update, "", (version or 0) + 1, None
+
+    # Clicking the out-of-range tile filters the list to those metrics.
+    @app.callback(
+        Output("abnormal-only", "value"),
+        Input("tile-out-of-range", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def filter_to_out_of_range(_clicks):
+        return ["on"]
+
+    app.clientside_callback(
+        """
+        function (value) {
+            const table = document.getElementById('metric-table');
+            if (table) table.scrollIntoView({behavior: 'smooth', block: 'center'});
+            return window.dash_clientside.no_update;
+        }
+        """,
+        Output("tile-out-of-range", "title"),
+        Input("abnormal-only", "value"),
+        prevent_initial_call=True,
+    )
+
+    # Upload: build a plan, show it, and only write once it is confirmed.
+    @app.callback(
+        Output("upload-modal", "style"),
+        Output("upload-preview", "children"),
+        Output("upload-error", "children"),
+        Output("upload-confirm", "disabled"),
+        Output("upload-plan", "data"),
+        Output("data-version", "data", allow_duplicate=True),
+        Input("upload-open", "n_clicks"),
+        Input("upload-cancel", "n_clicks"),
+        Input("upload-csv", "contents"),
+        Input("upload-confirm", "n_clicks"),
+        State("upload-plan", "data"),
+        State("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def upload_flow(_open, _cancel, contents, _confirm, held, version):
+        import base64
+
+        trigger = ctx.triggered_id
+        shown, hidden = {"display": "flex"}, {"display": "none"}
+
+        if trigger == "upload-open":
+            return shown, [], "", True, None, no_update
+        if trigger == "upload-cancel":
+            return hidden, [], "", True, None, no_update
+
+        if trigger == "upload-csv":
+            if not contents:
+                return shown, [], "", True, None, no_update
+            try:
+                _, _, payload = contents.partition(",")
+                frame = ingest.read_uploaded(base64.b64decode(payload))
+                plan = ingest.build_plan(data.csv_path, frame)
+            except ingest.IngestError as exc:
+                return shown, [], str(exc), True, None, no_update
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("Could not read the uploaded CSV")
+                return shown, [], f"Could not read that file: {exc}", True, None, no_update
+
+            if plan.total == 0:
+                return shown, render_upload_preview(plan), (
+                    "Nothing in that file could be imported."
+                ), True, None, no_update
+            return shown, render_upload_preview(plan), "", False, {"rows": plan.rows}, no_update
+
+        # Confirm
+        if not held or not held.get("rows"):
+            return shown, [], "Load a file first.", True, None, no_update
+        try:
+            plan = ingest.Plan(rows=held["rows"])
+            ingest.commit_plan(data.csv_path, plan)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Could not write the imported CSV")
+            return shown, no_update, f"Could not save: {exc}", True, no_update, no_update
+
+        data.reload()
+        return hidden, [], "", True, None, (version or 0) + 1
 
     @app.callback(
         Output("stat-tiles", "children"),

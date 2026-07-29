@@ -172,7 +172,7 @@ class TestAppDataReload:
         assert data.metrics["ALT"].values == [25.0, 23.0, 31.0]
         row = next(r for r in data.table_rows if r["id"] == "ALT")
         assert row["latest_display"] == "31 U/L"
-        assert row["last_date_display"] == "07/26"
+        assert row["last_date_display"] == "Jul 2026"
 
     def test_reload_without_a_path_is_a_no_op(self, metrics):
         from lab_timeseries_grapher.state import AppData

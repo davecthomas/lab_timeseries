@@ -8,7 +8,9 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - Summary tiles: metrics tracked, lab draws, latest draw, out-of-range count
 - Metric list with latest value, draw date, and in/out-of-range status
 - A plain-language description on each chart saying what that test measures
-- **Add data** — record a new result for any metric; the chart, list, and tiles update immediately
+- **Add data** — record a new result from the toolbar, the sidebar, or the ＋ on any chart
+- **Import CSV** — merge a lab export, with a preview of what changes
+- Click the **Out of range** tile to filter the list to just those tests
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
 - **Export CSV** — downloads the selected metrics as `blood-metrics-YYYY-MM-DD.csv`
@@ -46,6 +48,21 @@ The units and normal range are pre-filled from the band in use for that metric �
 The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
 
 The write is atomic: an interrupted save cannot leave a truncated file behind. Entering a date that already has a result for that metric is refused rather than silently overwriting.
+
+## Importing a CSV
+
+**↑ Import CSV** takes a lab export in whatever shape it arrives. Columns are worked out from the file: headers first (`Collected`, `Analyte`, `Result`, `UOM`, `Reference Range` all resolve), falling back to content — the column that parses as dates, the one that is mostly numeric, the one that reads like test names.
+
+Nothing is written until you confirm. The preview shows how the columns were read, what will be added, and what will be replaced:
+
+```
+2 added   1 replaced   0 skipped
+Columns read as: Date ← Collected, Test Name ← Analyte, Value ← Result, …
+Replacing:  ALT (sgpt) · 2025-10-10 · 23 U/L → 99 U/L
+Adding:     Ferritin · 2026-08-01 · 82 ng/mL
+```
+
+A result is identified by its test and its date. **When an upload carries a result for a test and date you already have, the uploaded one wins** — a corrected or re-issued report supersedes what was there. Tests the file introduces are added; rows that cannot be parsed are counted and skipped.
 
 ## Exporting data
 
@@ -150,6 +167,8 @@ Python 3.11–3.13 is required (`ai-api-unified` sets the floor).
 A row that carries a reference range states the range for that result, so that range draws the band. Where no row supplies one, a published reference range selected for an age and sex is used instead. How a row arrived makes no difference — a result typed into the app is a row like any other.
 
 When rows disagree, the most recent stated range wins: a newer report supersedes an older one.
+
+Age and sex are set in the sidebar and take effect immediately; every chart re-bands. They can also be given at startup:
 
 ```bash
 make run                       # defaults to age 60, male

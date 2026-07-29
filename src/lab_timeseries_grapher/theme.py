@@ -94,6 +94,35 @@ body {
     padding: 0.6rem 1.1rem;
     min-width: 7.5rem;
 }
+.stat-tile-action {
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.stat-tile-action:hover { border-color: rgba(57, 135, 229, 0.6); background: rgba(57, 135, 229, 0.10); }
+.add-button-quiet { margin-left: 0; border-color: rgba(255, 255, 255, 0.18); background: transparent; color: #c3c2b7; }
+.add-button-quiet:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+.modal-wide { max-width: 40rem; }
+.upload-drop {
+    border: 1px dashed rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    padding: 1.4rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #898781;
+    cursor: pointer;
+    margin-bottom: 0.8rem;
+}
+.upload-drop:hover { border-color: #3987e5; color: #ffffff; }
+.upload-link { color: #3987e5; text-decoration: underline; }
+.upload-preview { max-height: 16rem; overflow-y: auto; font-size: 0.8rem; color: #c3c2b7; }
+.upload-preview ul { margin: 0.2rem 0 0.6rem; padding-left: 1.1rem; }
+.upload-counts { display: flex; gap: 0.9rem; font-size: 0.85rem; margin-bottom: 0.4rem; }
+.count-add { color: #0ca30c; }
+.count-replace { color: #eda100; }
+.count-skip { color: #898781; }
+.upload-mapping { font-size: 0.72rem; color: #898781; margin: 0 0 0.6rem; }
+.upload-subhead { font-size: 0.75rem; color: #ffffff; margin: 0.4rem 0 0; }
 .stat-tile .tile-label {
     font-size: 0.7rem;
     color: #898781;
@@ -206,6 +235,21 @@ body {
     font-size: 0.72rem;
     color: #898781;
     font-variant-numeric: tabular-nums;
+}
+.profile-row { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.75rem; }
+.profile-hint { font-size: 0.7rem; color: #898781; margin: -0.5rem 0 0; }
+.sex-pills { display: flex; gap: 0.35rem; }
+.sex-pills label {
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    color: #c3c2b7;
+    cursor: pointer;
+}
+.sex-pills input { display: none; }
+.sex-pills label:has(input:checked) {
+    border-color: #3987e5; color: #ffffff; background: rgba(57, 135, 229, 0.15);
 }
 .sidebar .control-label {
     font-size: 0.7rem;
@@ -723,6 +767,19 @@ body {
     letter-spacing: -0.01em;
 }
 .chart-card .units { font-size: 0.75rem; color: #898781; }
+.chart-card .card-add {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    color: #898781;
+    font-family: inherit;
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 0.15rem 0.4rem;
+    margin-left: 0.5rem;
+    cursor: pointer;
+}
+.chart-card .card-add:hover { color: #ffffff; border-color: #3987e5; background: rgba(57, 135, 229, 0.18); }
 .chart-card .latest {
     margin-left: auto;
     font-size: 0.8rem;

@@ -40,7 +40,7 @@ def build_table_rows(metrics: dict[str, MetricSeries]) -> list[dict]:
                 "status": m.latest_status,
                 "status_glyph": STATUS_GLYPH.get(m.latest_status, ""),
                 "latest_display": m.latest_display,
-                "last_date_display": m.last_date.strftime("%m/%y"),
+                "last_date_display": m.last_date.strftime("%b %Y"),
                 "last_date_sort": m.last_date.strftime("%Y-%m-%d"),
                 "panel": m.panel,
             }
@@ -75,7 +75,17 @@ def stat_tiles(metrics: dict[str, MetricSeries]) -> html.Div:
             tile("Metrics tracked", str(len(metrics))),
             tile("Lab draws", str(len(all_dates))),
             tile("Latest draw", latest.strftime("%b %Y") if latest is not None else "—"),
-            tile("Out of range", f"▲▼ {out_count}", "at latest result"),
+            html.Button(
+                id="tile-out-of-range",
+                className="stat-tile stat-tile-action",
+                n_clicks=0,
+                title="Show only the metrics that are out of range",
+                children=[
+                    html.P("Out of range", className="tile-label"),
+                    html.P(f"▲▼ {out_count}", className="tile-value"),
+                    html.P("at latest result · click to filter", className="tile-note"),
+                ],
+            ),
         ],
     )
 
@@ -91,6 +101,15 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
     if series.units:
         head.append(html.Span(series.units, className="units"))
     head.append(html.Span(latest_children, className="latest"))
+    head.append(
+        html.Button(
+            "＋",
+            id={"type": "card-add", "index": series.name},
+            className="card-add",
+            n_clicks=0,
+            title=f"Add a result to {series.name}",
+        )
+    )
 
     body: list = [html.Div(className="card-head", children=head)]
     if series.description:
@@ -446,6 +465,81 @@ def entry_dialog(metric_names: list[str]) -> html.Div:
     )
 
 
+def upload_dialog() -> html.Div:
+    """Import a CSV. Nothing is written until the preview is confirmed."""
+    return html.Div(
+        id="upload-modal",
+        className="modal-backdrop",
+        style={"display": "none"},
+        children=html.Div(
+            className="modal-card modal-wide",
+            children=[
+                html.P("Import results", className="entry-eyebrow"),
+                html.H2("Upload a lab CSV", className="entry-metric"),
+                html.P(
+                    "Columns are worked out from the file. A result for a test and date "
+                    "you already have is replaced by the uploaded one.",
+                    className="entry-description",
+                ),
+                dcc.Upload(
+                    id="upload-csv",
+                    className="upload-drop",
+                    multiple=False,
+                    children=html.Div(["Drop a CSV here, or ", html.Span("browse", className="upload-link")]),
+                ),
+                html.Div(id="upload-preview", className="upload-preview"),
+                html.P(id="upload-error", className="entry-error"),
+                html.Div(
+                    className="modal-actions",
+                    children=[
+                        html.Button("Cancel", id="upload-cancel", className="modal-button", n_clicks=0),
+                        html.Button(
+                            "Import", id="upload-confirm",
+                            className="modal-button modal-button-primary", n_clicks=0, disabled=True,
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+def render_upload_preview(plan) -> list:
+    """What the import would do, before it does it."""
+    mapped = ", ".join(f"{k} ← {v}" for k, v in plan.mapping.items())
+    summary = [
+        html.Div(
+            className="upload-counts",
+            children=[
+                html.Span(f"{len(plan.added)} added", className="count-add"),
+                html.Span(f"{len(plan.replaced)} replaced", className="count-replace"),
+                html.Span(f"{plan.skipped} skipped", className="count-skip"),
+            ],
+        ),
+        html.P(f"Columns read as: {mapped}", className="upload-mapping"),
+    ]
+    if plan.replaced:
+        summary.append(html.P("Replacing:", className="upload-subhead"))
+        summary.append(
+            html.Ul(
+                [
+                    html.Li(f"{c.test} · {c.date} · {c.replaced} → {c.value}")
+                    for c in plan.replaced[:8]
+                ]
+                + ([html.Li(f"…and {len(plan.replaced) - 8} more")] if len(plan.replaced) > 8 else [])
+            )
+        )
+    if plan.added:
+        summary.append(html.P("Adding:", className="upload-subhead"))
+        summary.append(
+            html.Ul(
+                [html.Li(f"{c.test} · {c.date} · {c.value}") for c in plan.added[:8]]
+                + ([html.Li(f"…and {len(plan.added) - 8} more")] if len(plan.added) > 8 else [])
+            )
+        )
+    return summary
+
+
 def consent_dialog(model_name: str) -> html.Div:
     """First-run confirmation before any lab values leave the machine."""
     return html.Div(
@@ -500,6 +594,38 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
     sidebar = html.Aside(
         className="sidebar",
         children=[
+            html.Div(
+                className="profile-row",
+                children=[
+                    html.Div(
+                        [
+                            html.Label("Age", className="control-label", htmlFor="profile-age"),
+                            dcc.Input(
+                                id="profile-age", className="search-input", type="number",
+                                min=0, max=120, step=1, debounce=True,
+                            ),
+                        ]
+                    ),
+                    html.Div(
+                        [
+                            html.Label("Sex", className="control-label"),
+                            dcc.RadioItems(
+                                id="profile-sex",
+                                className="sex-pills",
+                                options=[
+                                    {"label": "Male", "value": "male"},
+                                    {"label": "Female", "value": "female"},
+                                ],
+                                inline=True,
+                            ),
+                        ]
+                    ),
+                ],
+            ),
+            html.P(
+                "Used for age and sex specific reference ranges.",
+                className="profile-hint",
+            ),
             html.Div(
                 [
                     html.Label("Search metrics", className="control-label", htmlFor="metric-search"),
@@ -567,6 +693,7 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             # Bumped when a manual entry lands, so the table, tiles and charts
             # re-read the reloaded data.
             dcc.Store(id="data-version", data=0),
+            dcc.Store(id="upload-plan"),
             dcc.Download(id="ai-download"),
             dcc.Download(id="metrics-download"),
             html.Div(
@@ -584,6 +711,12 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                         [html.Span("＋", className="add-icon"), "Add data"],
                         id="entry-open",
                         className="add-button",
+                        n_clicks=0,
+                    ),
+                    html.Button(
+                        [html.Span("↑", className="add-icon"), "Import CSV"],
+                        id="upload-open",
+                        className="add-button add-button-quiet",
                         n_clicks=0,
                     ),
                     html.Button(
@@ -635,5 +768,6 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             html.Div(className="app-shell", children=[sidebar, content]),
             consent_dialog(configured_model_name()),
             entry_dialog(sorted(metrics)),
+            upload_dialog(),
         ]
     )
