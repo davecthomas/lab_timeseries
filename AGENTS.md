@@ -11,6 +11,7 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 | `skills/bloodwork-analysis-helper/` | `SKILL.md` — the system prompt for AI commentary; edit here rather than in Python |
 | `src/lab_timeseries_grapher/ingest.py` | CSV import: column inference and the merge plan |
 | `src/lab_timeseries_grapher/cleanup.py` | Data repair: duplicate, truncation and unit detection, and the fix plan |
+| `src/lab_timeseries_grapher/conditions.py` | Authored, cited benign conditions and the extra bands/notes they add |
 | `tests/` | pytest suite for data shaping, figures, prompt assembly, and callback helpers |
 | `data/` | Gitignored lab CSVs — never commit or paste contents; values are personal health data |
 | `.github/workflows/` | CI: ruff + pytest |
@@ -44,6 +45,8 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 - Cleanup repairs only what another column of the same row already proves (a value against its printed form, a range against its printed range). Where the row cannot settle it — a units column contradicting the value, a row with no readable number — it reports and leaves the data alone. Unit *spellings* (`10^3/µL` vs `x10E3/uL`) are equivalence-checked, never rewritten
 - Band precedence: a range carried by the rows wins; the age/sex reference fills in only where no row states one. Rows are uniform — never branch on how a row was created
 - `reference_ranges.py` (authored, cited, age/sex-aware) supplies the fallback band; `MetricSeries.lab_band` is the newest range stated by the rows (`latest_range`, superseding ADR-0002's mode-then-median, which let two old reports outvote the newest). A reference is applied only when `reference_in_units` can reconcile units — applying a cells/µL range to a 10^3/µL value would misread 2.7 as critically low
+- Condition bands are drawn *in addition to* the normal band and never alter a verdict or a flag. Replacing the band would let a ticked checkbox hide a real abnormality — a thalassemia carrier who later becomes iron deficient still needs their falling MCV to register. `conditions.py` is authored and cited like `reference_ranges.py`; an effect with no defensible interval (biotin assay interference) carries a note and no band rather than an invented range
+- Condition colours separate by hue, never lightness, because the bands overlap; every band is also named in text on the card, so colour never carries the meaning alone. One legend serves the whole chart set
 - Metric descriptions come from the `Notes` column via `data.describe()`; never generate them
 - Downloads are selection-scoped and window-scoped, and use `dcc.Download` + `dcc.send_string`; filenames carry the export date
 - Analyses are keyed by metric selection + date window (`analyses.selection_key`); the pane shows one only while it matches the current selection

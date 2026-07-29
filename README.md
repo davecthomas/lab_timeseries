@@ -11,6 +11,7 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - **Add data** — record a new result from the toolbar, the sidebar, or the ＋ on any chart
 - **Import CSV** — merge a lab export, with a preview of what changes
 - **Clean up data** — find and repair duplicates, broken numbers and missing units, with a preview
+- **Relevant conditions** — declare a benign condition and see the range it would explain, drawn alongside the normal one
 - Click the **Out of range** tile to filter the list to just those tests
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
@@ -49,6 +50,29 @@ The units and normal range are pre-filled from the band in use for that metric �
 The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
 
 The write is atomic: an interrupted save cannot leave a truncated file behind. Entering a date that already has a result for that metric is refused rather than silently overwriting.
+
+## Relevant conditions
+
+Some people have a persistent, harmless reason for a result to sit outside the population range. A thalassemia carrier runs a low MCV for life. Gilbert syndrome raises bilirubin and does nothing else. Duffy-null individuals have a neutrophil count below the standard floor with no added infection risk. Against the population interval these read as findings on every single draw.
+
+Ticking a condition in the sidebar draws **an extra band, in its own colour, alongside the normal one**:
+
+```
+MCH   Latest 22.4 pg ▼ low
+      Range 26–32 pg · age/sex reference 27–32 pg
+      ■ Thalassemia trait: a low MCH accompanies the small red cells of
+        thalassemia trait, typically 19–26 pg.
+```
+
+The green normal band stays where it was, the purple band shows 19–26, and the point sits in the purple — still flagged low, but now visibly *explained*.
+
+**The normal band and the out-of-range flags never change.** That is deliberate. Replacing the band would mean a ticked checkbox could silently hide a real abnormality: a carrier who later becomes iron deficient still needs their falling MCV to register. Showing both boundaries lets you see the value, the population range, and the range the condition would account for, and decide which you are looking at.
+
+One legend covers the whole chart set. Colours separate by hue rather than lightness, since the bands overlap, and every band is also named in text on the card it affects — the colour never carries the meaning by itself.
+
+Some conditions add a note and no band. Biotin interference is not a shifted interval, it is an unreliable measurement, so inventing a range for it would misrepresent what is known; those are marked *(note only)* in the legend. Where a band cannot be converted into the metric's units it is dropped rather than rescaled, and the note still stands.
+
+Every condition and band is authored and cited in `conditions.py`. None of this is diagnostic, and a checkbox is not a diagnosis.
 
 ## Cleaning up the data
 

@@ -124,6 +124,63 @@ body {
 .upload-mapping { font-size: 0.72rem; color: #898781; margin: 0 0 0.6rem; }
 .upload-subhead { font-size: 0.75rem; color: #ffffff; margin: 0.4rem 0 0; }
 .cleanup-clean { color: #0ca30c; font-size: 0.85rem; }
+/* Relevant-conditions checklist and its one shared legend. */
+.conditions-block { display: flex; flex-direction: column; gap: 0.3rem; }
+.conditions-list { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.15rem; }
+.conditions-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    font-size: 0.78rem;
+    color: #c3c2b7;
+    cursor: pointer;
+    line-height: 1.3;
+}
+.conditions-item:hover { color: #ffffff; }
+.graphs-column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.condition-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.1rem;
+    margin: 0 0 0.9rem;
+    padding: 0.6rem 0.9rem;
+    background: #1a1a19;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 10px;
+    font-size: 0.76rem;
+}
+.legend-title { color: #898781; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.legend-item { display: inline-flex; align-items: center; gap: 0.4rem; color: #c3c2b7; }
+/* Filled where a band is drawn; outlined where the condition is note-only, so
+   the key never implies a shaded region the charts do not have. */
+.legend-swatch {
+    width: 0.85rem;
+    height: 0.6rem;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    opacity: 0.75;
+}
+.legend-swatch-empty { border-style: dotted; opacity: 1; }
+.legend-aside { color: #898781; }
+.legend-caveat { color: #898781; margin-left: auto; font-size: 0.72rem; }
+.card-condition {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin: 0.15rem 0 0;
+    font-size: 0.74rem;
+    color: #898781;
+    line-height: 1.35;
+}
+.condition-dot {
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 2px;
+    transform: translateY(-0.05rem);
+}
+.condition-name { color: #c3c2b7; }
 .stat-tile .tile-label {
     font-size: 0.7rem;
     color: #898781;

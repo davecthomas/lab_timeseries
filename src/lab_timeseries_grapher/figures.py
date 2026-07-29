@@ -28,8 +28,18 @@ def label_with_units(display: str, units: str) -> str:
     return f"{display} {units}"
 
 
-def make_figure(series: MetricSeries, cutoff: pd.Timestamp | None = None) -> go.Figure:
-    """Build a themed time-series figure with the normal band and range flags."""
+def make_figure(
+    series: MetricSeries,
+    cutoff: pd.Timestamp | None = None,
+    condition_effects: list | None = None,
+) -> go.Figure:
+    """Build a themed time-series figure with the normal band and range flags.
+
+    `condition_effects` are drawn *in addition to* the normal band, never in
+    place of it: the reader needs to see both the population range and the
+    range a declared condition would explain, and the out-of-range flags stay
+    exactly as they were. A condition can never hide a result.
+    """
     idx = filter_window(series, cutoff)
     dates = [series.dates[i] for i in idx]
     values = [series.values[i] for i in idx]
@@ -46,6 +56,23 @@ def make_figure(series: MetricSeries, cutoff: pd.Timestamp | None = None) -> go.
             fillcolor=theme.STATUS_GOOD,
             opacity=0.10,
             line_width=0,
+            layer="below",
+        )
+
+    # Condition bands carry a dotted edge in their own hue. They overlap each
+    # other and the normal band, so a fill alone would blend into an ambiguous
+    # wash; the edge keeps each boundary readable where they cross.
+    for applied in condition_effects or []:
+        if not applied.band:
+            continue
+        low, high = applied.band
+        fig.add_hrect(
+            y0=low,
+            y1=high,
+            fillcolor=applied.condition.color,
+            opacity=0.13,
+            line={"color": applied.condition.color, "width": 1, "dash": "dot"},
+            layer="below",
         )
 
     labels = [label_with_units(d, series.units) for d in displays]
