@@ -829,18 +829,26 @@ body {
     letter-spacing: -0.01em;
 }
 .chart-card .units { font-size: 0.75rem; color: #898781; }
+/* Labelled rather than a bare glyph: "＋" alone did not say what it added.
+   The label also gives the control a clickable area worth aiming at — as an
+   icon it was 27x20px, small enough to miss and read as doing nothing. */
 .chart-card .card-add {
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 6px;
     color: #898781;
     font-family: inherit;
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     line-height: 1;
-    padding: 0.15rem 0.4rem;
+    padding: 0.3rem 0.55rem;
     margin-left: 0.5rem;
     cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
 }
+.chart-card .card-add .add-icon { font-size: 0.85rem; line-height: 1; }
 .chart-card .card-add:hover { color: #ffffff; border-color: #3987e5; background: rgba(57, 135, 229, 0.18); }
 .chart-card .latest {
     margin-left: auto;

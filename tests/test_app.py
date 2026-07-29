@@ -17,6 +17,8 @@ from lab_timeseries_grapher.data import MetricSeries
 from lab_timeseries_grapher.layout import (
     ai_error,
     build_table_rows,
+    profile_governed,
+    profile_scope_note,
     render_analysis,
     render_index,
     window_cutoff,
@@ -356,3 +358,50 @@ class TestOutOfRangeTile:
 
     def test_a_real_click_filters(self):
         assert self._callback(create_app(sample_metrics()))(1) == ["on"]
+
+
+class TestProfileScopeNote:
+    """The sidebar previously implied the age/sex inputs re-banded everything.
+    They only decide a band where the rows carry none *and* the published
+    interval is age- or sex-banded, which is a small minority.
+    """
+
+    @staticmethod
+    def _series(name, lab_band, band):
+        from lab_timeseries_grapher.data import MetricSeries
+        return MetricSeries(
+            name=name, dates=[pd.Timestamp("2024-01-01")], values=[1.0],
+            display_values=["1"], band=band, units="g/dL", panel="CBC",
+            lab_band=lab_band,
+        )
+
+    def test_a_lab_range_excludes_the_metric(self):
+        """A range printed by the lab wins, so the profile cannot move it."""
+        metrics = {"Hemoglobin": self._series("Hemoglobin", (13.0, 17.0), (13.0, 17.0))}
+        assert profile_governed(metrics) == []
+
+    def test_a_reference_banded_by_sex_is_included(self):
+        metrics = {"Hemoglobin": self._series("Hemoglobin", None, (13.0, 18.0))}
+        assert profile_governed(metrics) == ["Hemoglobin"]
+
+    def test_a_reference_that_does_not_vary_is_excluded(self):
+        """ALT has one published interval, so age and sex change nothing."""
+        metrics = {"ALT": self._series("ALT", None, (4.0, 36.0))}
+        assert profile_governed(metrics) == []
+
+    def test_note_counts_only_the_governed_metrics(self):
+        metrics = {
+            "Hemoglobin": self._series("Hemoglobin", None, (13.0, 18.0)),
+            "ALT": self._series("ALT", None, (4.0, 36.0)),
+            "AST": self._series("AST", (5.0, 40.0), (5.0, 40.0)),
+        }
+        note = profile_scope_note(metrics)
+        assert "1 of 3" in note
+        assert "lab" in note
+
+    def test_note_says_so_when_nothing_is_governed(self):
+        metrics = {"AST": self._series("AST", (5.0, 40.0), (5.0, 40.0))}
+        assert "No metric" in profile_scope_note(metrics)
+
+    def test_empty_data_does_not_claim_a_count(self):
+        assert "0 of 0" not in profile_scope_note({})
