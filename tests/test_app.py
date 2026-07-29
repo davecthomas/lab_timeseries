@@ -114,6 +114,41 @@ class TestResolveSelection:
         out = resolve_selection("metric-search", ["A", "Z"], ["A"], ["A", "Z"], ["A"])
         assert out == ["A", "Z"]
 
+
+class TestOutOfRangeTileSelects:
+    """Filtering the list alone left every matching row unselected, so the
+    charts kept showing the previous selection and the tile looked inert.
+    """
+
+    def test_the_tile_charts_the_out_of_range_metrics(self):
+        out = resolve_selection(
+            "tile-out-of-range", ["A"], ["A", "B"], ["A", "B"], ["A"], ["B", "C"]
+        )
+        assert out == ["B", "C"]
+
+    def test_it_replaces_rather_than_appends(self):
+        """The point is a view of exactly what is out of range."""
+        out = resolve_selection(
+            "tile-out-of-range", ["A", "Z"], ["A"], ["A"], ["A"], ["B"]
+        )
+        assert out == ["B"]
+
+    def test_it_does_not_read_the_filtered_row_set(self):
+        """The filter it also switches on lands in a separate invocation, so
+        the rows may not have narrowed yet when this one runs."""
+        out = resolve_selection(
+            "tile-out-of-range", [], ["A", "B", "C", "D"], [], [], ["D"]
+        )
+        assert out == ["D"]
+
+    def test_nothing_out_of_range_selects_nothing(self):
+        out = resolve_selection("tile-out-of-range", ["A"], ["A"], ["A"], ["A"], [])
+        assert out == []
+
+    def test_other_triggers_ignore_the_out_of_range_list(self):
+        out = resolve_selection("metric-search", ["A"], ["A"], ["A"], ["A"], ["B", "C"])
+        assert out == ["A"]
+
     def test_handles_none_stored(self):
         assert resolve_selection("select-all", None, ["A"], [], None) == ["A"]
 
