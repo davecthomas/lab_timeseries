@@ -260,12 +260,22 @@ def resolve_selection(
     listed_ids: list[str],
     prev_visible_ids: list[str],
     selected_visible: list[str] | None,
+    out_of_range_ids: list[str] | None = None,
 ) -> list[str]:
     """Next stored selection for whichever control fired.
 
     `listed_ids` are the rows the table shows after the current filters;
     `prev_visible_ids` are the rows it showed when the user last clicked.
+
+    The out-of-range tile charts those metrics rather than merely filtering the
+    list to them: filtering alone left every matching row *unselected*, so the
+    charts went on showing whatever was selected before and the tile appeared
+    to do nothing. It reads from `out_of_range_ids` rather than `listed_ids`
+    because the filter it also switches on lands in a separate callback
+    invocation, so the rows may not have narrowed yet when this one runs.
     """
+    if trigger == "tile-out-of-range":
+        return list(out_of_range_ids or [])
     if trigger == "select-all":
         kept = list(stored or [])
         kept_set = set(kept)
@@ -325,18 +335,31 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Input("abnormal-only", "value"),
         Input("select-all", "n_clicks"),
         Input("clear-all", "n_clicks"),
+        Input("tile-out-of-range", "n_clicks"),
         Input("metric-table", "selected_row_ids"),
         Input("data-version", "data"),
         State("metric-table", "data"),
         State("selection-store", "data"),
     )
-    def update_table(search, panel, abnormal_only, _select, _clear, selected_row_ids, _version, prev_rows, stored):
+    def update_table(
+        search, panel, abnormal_only, _select, _clear, _tile, selected_row_ids,
+        _version, prev_rows, stored,
+    ):
         rows = filter_rows(data.table_rows, search, panel, abnormal_only or [])
         listed_ids = [r["id"] for r in rows]
         prev_visible_ids = [r["id"] for r in prev_rows or []]
 
+        trigger = ctx.triggered_id
+        if trigger == "tile-out-of-range" and not (
+            ctx.triggered and ctx.triggered[0].get("value")
+        ):
+            # Refreshing the stat tiles rebuilds the tile, and Dash fires for a
+            # recreated component. Only a real click carries a count.
+            trigger = None
+
         selection = resolve_selection(
-            ctx.triggered_id, stored, listed_ids, prev_visible_ids, selected_row_ids
+            trigger, stored, listed_ids, prev_visible_ids, selected_row_ids,
+            [r["id"] for r in data.table_rows if r["status"] in {STATUS_LOW, STATUS_HIGH}],
         )
         selected = set(selection)
         selected_rows = [i for i, r in enumerate(rows) if r["id"] in selected]

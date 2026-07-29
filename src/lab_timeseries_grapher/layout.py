@@ -79,11 +79,11 @@ def stat_tiles(metrics: dict[str, MetricSeries]) -> html.Div:
                 id="tile-out-of-range",
                 className="stat-tile stat-tile-action",
                 n_clicks=0,
-                title="Show only the metrics that are out of range",
+                title="Chart the metrics that are out of range",
                 children=[
                     html.P("Out of range", className="tile-label"),
                     html.P(f"▲▼ {out_count}", className="tile-value"),
-                    html.P("at latest result · click to filter", className="tile-note"),
+                    html.P("at latest result · click to chart", className="tile-note"),
                 ],
             ),
         ],
