@@ -103,7 +103,7 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
     head.append(html.Span(latest_children, className="latest"))
     head.append(
         html.Button(
-            "＋",
+            [html.Span("＋", className="add-icon"), "Add data"],
             id={"type": "card-add", "index": series.name},
             className="card-add",
             n_clicks=0,
