@@ -43,7 +43,22 @@ from .data import coerce_float
 
 logger = logging.getLogger("lab_timeseries_grapher")
 
-BACKUP_SUFFIX = ".backup.csv"
+# Backups live in a subdirectory, never beside the data file. `resolve_csv_path`
+# falls back to "the single CSV in /data" precisely because these filenames vary
+# per machine, so a backup sitting alongside as a second *.csv would break that
+# fallback — and if the live file were ever lost, the backup would silently be
+# loaded in its place. A subdirectory is invisible to a non-recursive glob.
+BACKUP_DIR = "backups"
+
+# The pre-subdirectory convention, still recognised so an old file can be found
+# and so CSV discovery can refuse to treat one as data.
+LEGACY_BACKUP_SUFFIX = ".backup.csv"
+
+
+def backup_path_for(csv_path: Path) -> Path:
+    """Where the backup of a given labs CSV belongs."""
+    csv_path = Path(csv_path)
+    return csv_path.parent / BACKUP_DIR / csv_path.name
 
 # Units seen in blood work. The list is a guard, not a vocabulary: a token has
 # to look like one of these before it is copied into the Units column, so a
@@ -352,15 +367,17 @@ def build_cleanup_plan(csv_path: Path) -> CleanupPlan:
 def commit_cleanup(csv_path: Path, plan: CleanupPlan) -> Path:
     """Write the repaired rows, keeping one backup. Returns the backup path.
 
-    The backup is a single fixed filename rather than a timestamped one: this
-    file is personal health data, and quietly accumulating copies of it every
-    time the button is pressed is its own kind of mess.
+    The backup keeps its original filename inside a `backups/` subdirectory,
+    and is overwritten rather than timestamped: this file is personal health
+    data, and quietly accumulating copies of it every time the button is
+    pressed is its own kind of mess.
     """
     csv_path = Path(csv_path)
     if not plan.rows:
         raise ValueError("Nothing to write.")
 
-    backup = csv_path.with_suffix(BACKUP_SUFFIX)
+    backup = backup_path_for(csv_path)
+    backup.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(csv_path, backup)
 
     fd, tmp = tempfile.mkstemp(dir=str(csv_path.parent), suffix=".csv")

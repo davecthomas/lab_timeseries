@@ -246,6 +246,21 @@ def data_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "data"
 
 
+def is_backup_name(name: str) -> bool:
+    """True for a filename produced by, or left over from, a cleanup backup.
+
+    Current backups live in `data/backups/` and so never appear in a glob of
+    `data/*.csv`. This also matches the older convention that wrote them
+    alongside the data, so an existing one cannot be mistaken for live data.
+    """
+    return ".backup" in Path(name).stem or Path(name).stem.endswith(".backup")
+
+
+def data_csvs() -> list[Path]:
+    """Every CSV in /data that is actual lab data, backups excluded."""
+    return sorted(p for p in data_dir().glob("*.csv") if not is_backup_name(p.name))
+
+
 def resolve_csv_path(csv_arg: str) -> Path:
     """
     Resolve the CSV path relative to the project /data directory.
@@ -255,6 +270,9 @@ def resolve_csv_path(csv_arg: str) -> Path:
       2. A filename found under the project's /data directory is used.
       3. If the named file is absent, fall back to the single CSV in /data
          (the data files are gitignored, so their names vary per machine).
+
+    Backups are never candidates for step 3. Loading one in place of a missing
+    data file would silently serve stale results as though they were current.
 
     The returned path may not exist; the caller is expected to check.
     """
@@ -266,7 +284,7 @@ def resolve_csv_path(csv_arg: str) -> Path:
     if candidate.exists():
         return candidate
 
-    csvs = sorted(data_dir().glob("*.csv"))
+    csvs = data_csvs()
     if len(csvs) == 1:
         logger.info(
             "Default CSV %s not found; using the only CSV in /data: %s", raw.name, csvs[0].name

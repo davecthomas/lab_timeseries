@@ -172,6 +172,41 @@ class TestResolveCsvPath:
         assert resolve_csv_path(str(target)) == target
 
 
+class TestBackupsAreNotData:
+    """A backup must never be mistaken for the live data file."""
+
+    def test_a_legacy_backup_does_not_defeat_the_fallback(self, tmp_path, monkeypatch):
+        """Two *.csv would otherwise make the single-CSV fallback give up, so
+        running a cleanup would stop the app from starting."""
+        monkeypatch.setattr(data, "data_dir", lambda: tmp_path)
+        (tmp_path / "my_labs.csv").write_text("Date\n")
+        (tmp_path / "my_labs.backup.csv").write_text("Date\n")
+        assert resolve_csv_path("labs_results.csv") == tmp_path / "my_labs.csv"
+
+    def test_a_lone_backup_is_never_loaded_as_data(self, tmp_path, monkeypatch):
+        """Serving stale results as though they were current is worse than
+        failing to start."""
+        monkeypatch.setattr(data, "data_dir", lambda: tmp_path)
+        (tmp_path / "my_labs.backup.csv").write_text("Date\n")
+        assert resolve_csv_path("labs_results.csv") == tmp_path / "labs_results.csv"
+
+    def test_a_backup_subdirectory_is_invisible(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(data, "data_dir", lambda: tmp_path)
+        (tmp_path / "my_labs.csv").write_text("Date\n")
+        (tmp_path / "backups").mkdir()
+        (tmp_path / "backups" / "my_labs.csv").write_text("Date\n")
+        assert resolve_csv_path("labs_results.csv") == tmp_path / "my_labs.csv"
+        assert [p.name for p in data.data_csvs()] == ["my_labs.csv"]
+
+    def test_ordinary_names_are_not_treated_as_backups(self):
+        for name in ("labs_results.csv", "my_labs.csv", "backup_labs.csv"):
+            assert not data.is_backup_name(name), name
+
+    def test_backup_names_are_recognised(self):
+        for name in ("labs_results.backup.csv", "my_labs.backup.csv"):
+            assert data.is_backup_name(name), name
+
+
 class TestValidateSchema:
     def test_passes_with_required_columns(self):
         validate_schema(labs_frame([]))

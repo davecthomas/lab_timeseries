@@ -268,7 +268,19 @@ class TestCommit:
         path = write_csv(tmp_path, [row(), row()])
         cleanup.commit_cleanup(path, cleanup.build_cleanup_plan(path))
         cleanup.commit_cleanup(path, cleanup.build_cleanup_plan(path))
-        assert len(list(tmp_path.glob("*.csv"))) == 2
+        assert len(list((tmp_path / cleanup.BACKUP_DIR).glob("*.csv"))) == 1
+
+    def test_the_backup_never_sits_beside_the_data(self, tmp_path):
+        """A second *.csv in /data breaks the single-CSV fallback, and would be
+        loaded as live data if the real file were ever lost."""
+        path = write_csv(tmp_path, [row(), row()])
+        cleanup.commit_cleanup(path, cleanup.build_cleanup_plan(path))
+        assert [p.name for p in tmp_path.glob("*.csv")] == ["labs.csv"]
+
+    def test_the_backup_keeps_the_original_filename(self, tmp_path):
+        path = write_csv(tmp_path, [row(), row()])
+        backup = cleanup.commit_cleanup(path, cleanup.build_cleanup_plan(path))
+        assert backup == tmp_path / cleanup.BACKUP_DIR / "labs.csv"
 
     def test_the_header_survives(self, tmp_path):
         path = write_csv(tmp_path, [row(), row()])

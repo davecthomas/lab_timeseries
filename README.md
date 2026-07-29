@@ -60,7 +60,9 @@ The write is atomic: an interrupted save cannot leave a truncated file behind. E
 - a units column left blank while the printed value carried the unit
 - a reference range stored low-high inverted
 
-Every repair recovers something another column of the same row already states; none invents a number. Nothing is written until you confirm, and the file is backed up first to `labs_results.backup.csv` — one backup, overwritten each run, rather than a growing pile of copies of your health data.
+Every repair recovers something another column of the same row already states; none invents a number. Nothing is written until you confirm, and the file is backed up first to `data/backups/` under its original name — one backup, overwritten each run, rather than a growing pile of copies of your health data.
+
+The backup deliberately does **not** sit beside the data file. `/data` is scanned for the lab CSV by name, falling back to the single CSV present when the name does not match, so a second `.csv` alongside it would break startup — and if the data file were ever lost, a backup left in `/data` would silently be loaded in its place. Backups in a subdirectory can be neither.
 
 ```
 7 to fix   376 rows scanned
