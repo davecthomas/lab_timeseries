@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
-from . import analyses, entries, export, ingest, theme
+from . import analyses, cleanup, entries, export, ingest, theme
 from .commentary import CommentaryError, generate_commentary
 from .data import STATUS_HIGH, STATUS_LOW, MetricSeries
 from .layout import (
@@ -23,6 +23,7 @@ from .layout import (
 from .layout import (
     build_layout,
     render_analysis,
+    render_cleanup_preview,
     render_graphs,
     render_index,
     render_upload_preview,
@@ -584,7 +585,12 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Input("tile-out-of-range", "n_clicks"),
         prevent_initial_call=True,
     )
-    def filter_to_out_of_range(_clicks):
+    def filter_to_out_of_range(clicks):
+        # Refreshing the stat tiles rebuilds this button, and Dash fires the
+        # callback for the recreated component. Without this guard, saving an
+        # entry or a cleanup would silently switch the filter on.
+        if not clicks:
+            return no_update
         return ["on"]
 
     app.clientside_callback(
@@ -656,6 +662,55 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
             logger.exception("Could not write the imported CSV")
             return shown, no_update, f"Could not save: {exc}", True, no_update, no_update
 
+        data.reload()
+        return hidden, [], "", True, None, (version or 0) + 1
+
+    # Clean up: scan on open, repair only once the report is confirmed.
+    @app.callback(
+        Output("cleanup-modal", "style"),
+        Output("cleanup-report", "children"),
+        Output("cleanup-error", "children"),
+        Output("cleanup-confirm", "disabled"),
+        Output("cleanup-plan", "data"),
+        Output("data-version", "data", allow_duplicate=True),
+        Input("cleanup-open", "n_clicks"),
+        Input("cleanup-cancel", "n_clicks"),
+        Input("cleanup-confirm", "n_clicks"),
+        State("cleanup-plan", "data"),
+        State("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def cleanup_flow(_open, _cancel, _confirm, held, version):
+        trigger = ctx.triggered_id
+        shown, hidden = {"display": "flex"}, {"display": "none"}
+
+        if trigger == "cleanup-cancel":
+            return hidden, [], "", True, None, no_update
+
+        if trigger == "cleanup-open":
+            try:
+                plan = cleanup.build_cleanup_plan(data.csv_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("Could not scan the labs CSV")
+                return shown, [], f"Could not read the data file: {exc}", True, None, no_update
+            # A clean file still gets its report; there is just nothing to apply.
+            return (
+                shown, render_cleanup_preview(plan), "", plan.total == 0,
+                {"rows": plan.rows} if plan.total else None, no_update,
+            )
+
+        # Confirm
+        if not held or not held.get("rows"):
+            return shown, no_update, "Nothing to fix.", True, None, no_update
+        try:
+            backup = cleanup.commit_cleanup(
+                data.csv_path, cleanup.CleanupPlan(rows=held["rows"])
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Could not write the cleaned CSV")
+            return shown, no_update, f"Could not save: {exc}", True, no_update, no_update
+
+        logger.info("Cleanup applied; previous file kept at %s", backup)
         data.reload()
         return hidden, [], "", True, None, (version or 0) + 1
 

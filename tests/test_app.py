@@ -1,4 +1,5 @@
 import pandas as pd
+from dash import no_update
 
 from lab_timeseries_grapher.app import (
     consent_denied,
@@ -301,3 +302,22 @@ class TestCreateApp:
         app = create_app(sample_metrics())
         assert "Content-Security-Policy" in app.index_string
         assert "img-src 'self' data: blob:;" in app.index_string
+
+
+class TestOutOfRangeTile:
+    """Dash fires a callback when its Input component is *recreated*, not only
+    when it is clicked. Refreshing the stat tiles rebuilds this button, so
+    without a guard any save would silently switch the filter on.
+    """
+
+    @staticmethod
+    def _callback(app):
+        registered = app.callback_map["abnormal-only.value"]["callback"]
+        return getattr(registered, "__wrapped__", registered)
+
+    def test_a_rebuilt_button_does_not_filter(self):
+        result = self._callback(create_app(sample_metrics()))(0)
+        assert result is no_update
+
+    def test_a_real_click_filters(self):
+        assert self._callback(create_app(sample_metrics()))(1) == ["on"]

@@ -10,6 +10,7 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 | `src/lab_timeseries_grapher/` | The app package: `data.py` (CSV → `MetricSeries`), `figures.py` (Plotly charts), `layout.py` (Dash layout), `theme.py` (colors/CSS), `commentary.py` (AI prompt + Claude call), `analyses.py` (session-held analyses + export), `export.py` (metric CSV export), `entries.py` (manual entry), `state.py` (reloadable AppData), `app.py` (factory + callbacks), `cli.py` (entry point) |
 | `skills/bloodwork-analysis-helper/` | `SKILL.md` — the system prompt for AI commentary; edit here rather than in Python |
 | `src/lab_timeseries_grapher/ingest.py` | CSV import: column inference and the merge plan |
+| `src/lab_timeseries_grapher/cleanup.py` | Data repair: duplicate, truncation and unit detection, and the fix plan |
 | `tests/` | pytest suite for data shaping, figures, prompt assembly, and callback helpers |
 | `data/` | Gitignored lab CSVs — never commit or paste contents; values are personal health data |
 | `.github/workflows/` | CI: ruff + pytest |
@@ -38,7 +39,9 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 - Dash's DataTable ships its own active-cell style (a red wash) and its `state` keys do not cover checkbox-selected rows; both are handled by CSS in `theme.py`, not `style_data_conditional`
 - Manual entries append to the labs CSV atomically (temp file + `os.replace`) and inherit units/range/panel from the metric's latest existing row; `Notes` records provenance
 - Uploads build a `Plan` first and write nothing until confirmed; on a (test, date) collision the uploaded row wins
-- Pattern-matching Inputs fire when matching components are *created*, not only clicked — guard on `ctx.triggered[0]["value"]` or rendering charts will trip the callback
+- Dash fires a callback when an Input *component* is recreated, not only when it is interacted with. This bites twice: pattern-matching Inputs trip when charts render (guard on `ctx.triggered[0]["value"]`), and a plain Input trips when another callback replaces its parent's `children` (guard on the click count — refreshing the stat tiles was silently switching the out-of-range filter on)
+- Anything that rewrites the labs CSV builds a plan first, previews it, and writes only on confirm — `ingest` for uploads, `cleanup` for repairs. Cleanup keeps one fixed-name backup rather than timestamped copies, so health data does not accumulate
+- Cleanup repairs only what another column of the same row already proves (a value against its printed form, a range against its printed range). Where the row cannot settle it — a units column contradicting the value, a row with no readable number — it reports and leaves the data alone. Unit *spellings* (`10^3/µL` vs `x10E3/uL`) are equivalence-checked, never rewritten
 - Band precedence: a range carried by the rows wins; the age/sex reference fills in only where no row states one. Rows are uniform — never branch on how a row was created
 - `reference_ranges.py` (authored, cited, age/sex-aware) supplies the fallback band; `MetricSeries.lab_band` is the newest range stated by the rows (`latest_range`, superseding ADR-0002's mode-then-median, which let two old reports outvote the newest). A reference is applied only when `reference_in_units` can reconcile units — applying a cells/µL range to a 10^3/µL value would misread 2.7 as critically low
 - Metric descriptions come from the `Notes` column via `data.describe()`; never generate them
@@ -56,5 +59,5 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 
 ## Last verified
 
-2026-07-25 — sources: README.md, pyproject.toml, Makefile, .env.example, .github/workflows/ci.yml
+2026-07-29 — sources: README.md, pyproject.toml, Makefile, .env.example, .github/workflows/ci.yml
 <!-- repo-context:end -->
