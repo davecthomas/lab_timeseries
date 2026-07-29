@@ -22,6 +22,7 @@ from .layout import (
 )
 from .layout import (
     build_layout,
+    profile_scope_note,
     render_analysis,
     render_cleanup_preview,
     render_graphs,
@@ -744,6 +745,16 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
     )
     def refresh_tiles(_version):
         return stat_tiles(data.metrics).children
+
+    # The claim this line makes depends on the data, so it is recomputed with
+    # it rather than written once into the layout.
+    @app.callback(
+        Output("profile-scope", "children"),
+        Input("data-version", "data"),
+        prevent_initial_call=True,
+    )
+    def refresh_profile_scope(_version):
+        return profile_scope_note(data.metrics)
 
     @app.callback(
         Output("export-csv", "disabled"),

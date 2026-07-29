@@ -12,7 +12,7 @@ from .analyses import window_label
 from .commentary import configured_model_name
 from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
 from .figures import make_figure
-from .reference_ranges import describe_reference
+from .reference_ranges import describe_reference, varies_with_profile
 from .synonyms import format_synonyms
 
 INITIAL_METRIC_COUNT = 10
@@ -87,6 +87,38 @@ def stat_tiles(metrics: dict[str, MetricSeries]) -> html.Div:
                 ],
             ),
         ],
+    )
+
+
+def profile_governed(metrics: dict[str, MetricSeries]) -> list[str]:
+    """Metrics whose band the age/sex settings actually decide.
+
+    Two conditions, and both matter. The reference only supplies a band where
+    the rows carry none — a range printed by the lab wins — and the reference
+    only moves with the profile for the tests whose published interval is
+    age- or sex-banded. Most metrics meet neither, which is why this is worth
+    stating rather than leaving the reader to infer it.
+    """
+    return sorted(
+        m.name
+        for m in metrics.values()
+        if not m.lab_band and m.band and varies_with_profile(m.name)
+    )
+
+
+def profile_scope_note(metrics: dict[str, MetricSeries]) -> str:
+    """One line saying what the age and sex inputs currently change."""
+    if not metrics:
+        return "Used for age and sex specific reference ranges."
+    governed = profile_governed(metrics)
+    if not governed:
+        return (
+            "No metric currently depends on these — every result carries a "
+            "range from your lab, which takes precedence."
+        )
+    return (
+        f"Sets the range for {len(governed)} of {len(metrics)} metrics. "
+        "Elsewhere the range printed by your lab takes precedence."
     )
 
 
@@ -694,8 +726,10 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                 ],
             ),
             html.P(
-                "Used for age and sex specific reference ranges.",
+                profile_scope_note(metrics),
+                id="profile-scope",
                 className="profile-hint",
+                title="These settings only apply where your lab printed no range",
             ),
             html.Div(
                 [

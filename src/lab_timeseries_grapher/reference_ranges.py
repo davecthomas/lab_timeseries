@@ -253,3 +253,29 @@ def describe_reference(ref: Reference | None) -> str:
         return ""
     text = f"{span} {ref.units}".strip()
     return f"{text} ({ref.note})" if ref.note else text
+
+
+# Profiles that between them exercise every branch in the table: both sexes,
+# and ages either side of the PSA and ESR thresholds.
+_PROBE_PROFILES: tuple[Profile, ...] = (
+    Profile(age=30, sex=MALE),
+    Profile(age=60, sex=MALE),
+    Profile(age=75, sex=MALE),
+    Profile(age=30, sex=FEMALE),
+    Profile(age=60, sex=FEMALE),
+    Profile(age=75, sex=FEMALE),
+)
+
+
+def varies_with_profile(test_name: str) -> bool:
+    """True when this test's reference band depends on age or sex.
+
+    Derived by evaluating the table rather than read from a hand-kept list, so
+    a rule that gains an age band is reflected without anyone remembering to
+    update a second place.
+    """
+    bands = set()
+    for profile in _PROBE_PROFILES:
+        ref = reference_for(test_name, profile)
+        bands.add(ref.band if ref else None)
+    return len(bands) > 1
