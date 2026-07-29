@@ -10,6 +10,7 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - A plain-language description on each chart saying what that test measures
 - **Add data** — record a new result from the toolbar, the sidebar, or the ＋ on any chart
 - **Import CSV** — merge a lab export, with a preview of what changes
+- **Clean up data** — find and repair duplicates, broken numbers and missing units, with a preview
 - Click the **Out of range** tile to filter the list to just those tests
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
@@ -48,6 +49,32 @@ The units and normal range are pre-filled from the band in use for that metric �
 The result is appended to `data/labs_results.csv` — the same file your lab export lives in, so there is one source of truth. The new row inherits its units, reference range, and panel from that metric's most recent existing row, so the point lands in the band the chart already draws. Its `Notes` cell records `Manually entered <date>`, which is how you find or remove entries later.
 
 The write is atomic: an interrupted save cannot leave a truncated file behind. Entering a date that already has a result for that metric is refused rather than silently overwriting.
+
+## Cleaning up the data
+
+**✓ Clean up data** scans every row for the ways lab exports arrive damaged, and repairs the ones it can prove:
+
+- the same test recorded twice on the same day — the later row is kept, matching the import rule
+- a thousands separator that ate a value, so `3,457` was stored as `3`
+- the same truncation inside a reference range, so `1,500 - 7,800` became `500`–`7`
+- a units column left blank while the printed value carried the unit
+- a reference range stored low-high inverted
+
+Every repair recovers something another column of the same row already states; none invents a number. Nothing is written until you confirm, and the file is backed up first to `data/backups/` under its original name — one backup, overwritten each run, rather than a growing pile of copies of your health data.
+
+The backup deliberately does **not** sit beside the data file. `/data` is scanned for the lab CSV by name, falling back to the single CSV present when the name does not match, so a second `.csv` alongside it would break startup — and if the data file were ever lost, a backup left in `/data` would silently be loaded in its place. Backups in a subdirectory can be neither.
+
+```
+7 to fix   376 rows scanned
+Duplicate rows removed (4)
+  Calcium · 2021-03-30 · 9.8 mg/dL recorded twice
+Values restored from a truncated number (1)
+  Absolute Neutrophils · 2026-09-01 · 3 → 3457
+```
+
+Two kinds are reported but deliberately **not** fixed, because the row alone cannot settle them: a units column that genuinely contradicts the printed value (choosing a side would rescale a result), and a row with no readable number at all (`NOT APPLICABLE (calc)`, `B Pattern`). Those are listed so you can decide. Units that merely look different — `10^3/µL` against `x10E3/uL` — are recognised as the same unit and left alone.
+
+Running it twice is a no-op: the second pass finds nothing to fix.
 
 ## Importing a CSV
 

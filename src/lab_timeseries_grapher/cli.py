@@ -9,7 +9,7 @@ import os
 from dash import exceptions
 
 from .app import create_app
-from .data import data_dir, resolve_csv_path
+from .data import data_csvs, resolve_csv_path
 from .reference_ranges import Profile
 from .state import AppData
 
@@ -58,7 +58,7 @@ def main() -> None:
     csv_path = resolve_csv_path(args.csv)
     if not csv_path.exists():
         logger.error("CSV not found at resolved path %s", csv_path)
-        available = sorted(p.name for p in data_dir().glob("*.csv"))
+        available = [p.name for p in data_csvs()]
         hint = (
             f" Available CSVs in /data: {', '.join(available)}."
             if available

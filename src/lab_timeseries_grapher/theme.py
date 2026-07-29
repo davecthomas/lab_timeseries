@@ -123,6 +123,7 @@ body {
 .count-skip { color: #898781; }
 .upload-mapping { font-size: 0.72rem; color: #898781; margin: 0 0 0.6rem; }
 .upload-subhead { font-size: 0.75rem; color: #ffffff; margin: 0.4rem 0 0; }
+.cleanup-clean { color: #0ca30c; font-size: 0.85rem; }
 .stat-tile .tile-label {
     font-size: 0.7rem;
     color: #898781;
@@ -603,6 +604,10 @@ body {
     background: rgba(57, 135, 229, 0.22);
 }
 .modal-button-primary:hover { background: rgba(57, 135, 229, 0.36); }
+/* A button that cannot act must not look as though it can. */
+.modal-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.modal-button:disabled:hover { background: transparent; }
+.modal-button-primary:disabled:hover { background: rgba(57, 135, 229, 0.22); }
 .split-pane {
     display: flex;
     gap: 1.25rem;

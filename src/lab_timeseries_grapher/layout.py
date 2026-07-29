@@ -540,6 +540,77 @@ def render_upload_preview(plan) -> list:
     return summary
 
 
+def cleanup_dialog() -> html.Div:
+    """Repair the labs CSV. Nothing is written until the report is confirmed."""
+    return html.Div(
+        id="cleanup-modal",
+        className="modal-backdrop",
+        style={"display": "none"},
+        children=html.Div(
+            className="modal-card modal-wide",
+            children=[
+                html.P("Maintenance", className="entry-eyebrow"),
+                html.H2("Clean up data", className="entry-metric"),
+                html.P(
+                    "Checks every row for duplicates, values and ranges broken by a "
+                    "thousands separator, and missing or contradictory units. Nothing "
+                    "is changed until you confirm, and the file is backed up first.",
+                    className="entry-description",
+                ),
+                html.Div(id="cleanup-report", className="upload-preview"),
+                html.P(id="cleanup-error", className="entry-error"),
+                html.Div(
+                    className="modal-actions",
+                    children=[
+                        html.Button("Cancel", id="cleanup-cancel", className="modal-button", n_clicks=0),
+                        html.Button(
+                            "Apply fixes", id="cleanup-confirm",
+                            className="modal-button modal-button-primary", n_clicks=0, disabled=True,
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+def render_cleanup_preview(plan) -> list:
+    """What the cleanup would repair, grouped by kind, before it repairs it."""
+    from .cleanup import KIND_LABELS
+
+    grouped = plan.by_kind()
+    if not grouped:
+        return [
+            html.P(
+                f"Nothing to fix — all {plan.scanned} rows look sound.",
+                className="cleanup-clean",
+            )
+        ]
+
+    report: list = [
+        html.Div(
+            className="upload-counts",
+            children=[
+                html.Span(f"{plan.total} to fix", className="count-replace"),
+                html.Span(f"{plan.scanned} rows scanned", className="count-skip"),
+            ],
+        )
+    ]
+    for kind, issues in grouped.items():
+        # Unreadable rows are reported so they are not a surprise, but they are
+        # not repaired, so the heading has to say so rather than imply a fix.
+        report.append(
+            html.P(f"{KIND_LABELS[kind]} ({len(issues)})", className="upload-subhead")
+        )
+        report.append(
+            html.Ul(
+                [html.Li(f"{i.test} · {i.date} · {i.detail}") for i in issues[:8]]
+                + ([html.Li(f"…and {len(issues) - 8} more")] if len(issues) > 8 else [])
+            )
+        )
+    return report
+
+
 def consent_dialog(model_name: str) -> html.Div:
     """First-run confirmation before any lab values leave the machine."""
     return html.Div(
@@ -694,6 +765,7 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             # re-read the reloaded data.
             dcc.Store(id="data-version", data=0),
             dcc.Store(id="upload-plan"),
+            dcc.Store(id="cleanup-plan"),
             dcc.Download(id="ai-download"),
             dcc.Download(id="metrics-download"),
             html.Div(
@@ -716,6 +788,12 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                     html.Button(
                         [html.Span("↑", className="add-icon"), "Import CSV"],
                         id="upload-open",
+                        className="add-button add-button-quiet",
+                        n_clicks=0,
+                    ),
+                    html.Button(
+                        [html.Span("✓", className="add-icon"), "Clean up data"],
+                        id="cleanup-open",
                         className="add-button add-button-quiet",
                         n_clicks=0,
                     ),
@@ -769,5 +847,6 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
             consent_dialog(configured_model_name()),
             entry_dialog(sorted(metrics)),
             upload_dialog(),
+            cleanup_dialog(),
         ]
     )
