@@ -22,6 +22,7 @@ from .layout import (
 )
 from .layout import (
     build_layout,
+    condition_legend,
     render_analysis,
     render_cleanup_preview,
     render_graphs,
@@ -371,8 +372,9 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Input("metric-table", "derived_virtual_data"),
         Input("date-window", "value"),
         Input("data-version", "data"),
+        Input("conditions-select", "value"),
     )
-    def update_graphs(stored, visible_rows, window, _version):
+    def update_graphs(stored, visible_rows, window, _version, conditions_selected):
         if not stored:
             return [
                 html.Div(
@@ -390,7 +392,7 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
 
         ordered = selection_order(stored, visible_rows)
         cutoff = window_cutoff(data.metrics, window or "all")
-        rendered = render_graphs(data.metrics, ordered, cutoff)
+        rendered = render_graphs(data.metrics, ordered, cutoff, conditions_selected)
         if not rendered:
             logger.warning("No graphs rendered for selection: %s", ", ".join(stored))
         return rendered
@@ -736,6 +738,15 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         logger.info("Cleanup applied; previous file kept at %s", backup)
         data.reload()
         return hidden, [], "", True, None, (version or 0) + 1
+
+    @app.callback(
+        Output("condition-legend", "children"),
+        Output("condition-legend", "style"),
+        Input("conditions-select", "value"),
+    )
+    def update_condition_legend(conditions_selected):
+        legend = condition_legend(conditions_selected)
+        return legend.children, legend.style
 
     @app.callback(
         Output("stat-tiles", "children"),

@@ -10,6 +10,7 @@ from dash import dash_table, dcc, html
 from . import theme
 from .analyses import window_label
 from .commentary import configured_model_name
+from .conditions import CONDITION_OPTIONS, effects_for, selected_conditions
 from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
 from .figures import make_figure
 from .reference_ranges import describe_reference
@@ -90,7 +91,64 @@ def stat_tiles(metrics: dict[str, MetricSeries]) -> html.Div:
     )
 
 
-def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
+def condition_legend(selected: list[str] | None) -> html.Div:
+    """One legend for the whole chart set, not a repeat on every card.
+
+    Hidden entirely when nothing is selected, so the default view carries no
+    explanation for something it is not showing.
+    """
+    chosen = selected_conditions(selected)
+    if not chosen:
+        return html.Div(id="condition-legend", className="condition-legend", style={"display": "none"})
+
+    items: list = [
+        html.Span("Condition ranges", className="legend-title"),
+    ]
+    for condition in chosen:
+        # A condition with no band gets a hollow swatch: there is nothing
+        # shaded on the charts for it, and a filled key would imply there is.
+        swatch_class = "legend-swatch" if condition.has_bands else "legend-swatch legend-swatch-empty"
+        items.append(
+            html.Span(
+                className="legend-item",
+                title=f"{condition.summary} — {condition.source}",
+                children=[
+                    html.Span(
+                        className=swatch_class,
+                        style={
+                            "background": condition.color if condition.has_bands else "transparent",
+                            "borderColor": condition.color,
+                        },
+                    ),
+                    html.Span(condition.label, className="legend-label"),
+                    html.Span(
+                        "" if condition.has_bands else " (note only)",
+                        className="legend-aside",
+                    ),
+                ],
+            )
+        )
+    items.append(
+        html.Span(
+            "Shown alongside the normal range, which is unchanged. "
+            "Not a diagnosis.",
+            className="legend-caveat",
+        )
+    )
+    # Style is set on both branches so a callback can read it either way.
+    return html.Div(
+        id="condition-legend",
+        className="condition-legend",
+        children=items,
+        style={"display": "flex"},
+    )
+
+
+def chart_card(
+    series: MetricSeries,
+    cutoff: pd.Timestamp | None,
+    condition_effects: list | None = None,
+) -> html.Div:
     """A chart card: name, units, latest-value flag, and the figure."""
     flag_class = f"flag-{series.latest_status}" if series.latest_status != "unknown" else ""
     latest_children: list = [f"Latest {series.latest_display}"]
@@ -137,12 +195,30 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
             )
         )
 
+    # The text notation accompanies the coloured band rather than replacing it:
+    # the colour says where, the words say why, and a reader who cannot
+    # distinguish the hues still gets the whole message.
+    for applied in condition_effects or []:
+        body.append(
+            html.P(
+                [
+                    html.Span(
+                        className="condition-dot",
+                        style={"background": applied.condition.color},
+                    ),
+                    html.Span(f"{applied.condition.label}: ", className="condition-name"),
+                    applied.note,
+                ],
+                className="card-condition",
+            )
+        )
+
     return html.Div(
         className="chart-card",
         children=[
             *body,
             dcc.Graph(
-                figure=make_figure(series, cutoff),
+                figure=make_figure(series, cutoff, condition_effects),
                 config={
                     "displaylogo": False,
                     "modeBarButtonsToRemove": ["zoomIn2d", "zoomOut2d", "resetScale2d", "lasso2d", "select2d"],
@@ -154,10 +230,21 @@ def chart_card(series: MetricSeries, cutoff: pd.Timestamp | None) -> html.Div:
 
 
 def render_graphs(
-    metrics: dict[str, MetricSeries], selected: list[str], cutoff: pd.Timestamp | None
+    metrics: dict[str, MetricSeries],
+    selected: list[str],
+    cutoff: pd.Timestamp | None,
+    conditions_selected: list[str] | None = None,
 ) -> list[html.Div]:
     """Chart cards for the selected metric names, in the given order."""
-    return [chart_card(metrics[name], cutoff) for name in selected if name in metrics]
+    return [
+        chart_card(
+            metrics[name],
+            cutoff,
+            effects_for(name, metrics[name].units, conditions_selected),
+        )
+        for name in selected
+        if name in metrics
+    ]
 
 
 def metric_table(table_rows: list[dict], initial_selection: list[str]) -> dash_table.DataTable:
@@ -698,6 +785,25 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                 className="profile-hint",
             ),
             html.Div(
+                className="conditions-block",
+                children=[
+                    html.Label("Relevant conditions", className="control-label"),
+                    dcc.Checklist(
+                        id="conditions-select",
+                        className="conditions-list",
+                        options=CONDITION_OPTIONS,
+                        value=[],
+                        labelClassName="conditions-item",
+                    ),
+                    html.P(
+                        "Draws an extra range where a benign condition explains "
+                        "a result. The normal range and the out-of-range flags "
+                        "do not change.",
+                        className="profile-hint",
+                    ),
+                ],
+            ),
+            html.Div(
                 [
                     html.Label("Search metrics", className="control-label", htmlFor="metric-search"),
                     dcc.Input(
@@ -810,9 +916,15 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                 className="split-pane",
                 children=[
                     html.Div(
-                        id="graphs-container",
-                        className="graphs-grid",
-                        children=render_graphs(metrics, initial_selection, None),
+                        className="graphs-column",
+                        children=[
+                            condition_legend([]),
+                            html.Div(
+                                id="graphs-container",
+                                className="graphs-grid",
+                                children=render_graphs(metrics, initial_selection, None),
+                            ),
+                        ],
                     ),
                     ai_pane(),
                 ],
