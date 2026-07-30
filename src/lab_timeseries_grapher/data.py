@@ -27,6 +27,22 @@ STATUS_HIGH = "high"
 STATUS_UNKNOWN = "unknown"
 
 
+def status_in(value: float, band: tuple[float, float] | None) -> str:
+    """Where one value sits against one interval.
+
+    The population band and a condition's band are read by the same rule, so a
+    card that reports both is comparing like with like — and the condition
+    verdict is computed rather than authored alongside the note.
+    """
+    if band is None:
+        return STATUS_UNKNOWN
+    low, high = band
+    if value < low:
+        return STATUS_LOW
+    if value > high:
+        return STATUS_HIGH
+    return STATUS_IN
+
 
 def coerce_float(x) -> float | None:
     """Try to coerce a cell to float; return None if impossible."""
@@ -159,14 +175,7 @@ class MetricSeries:
         return self.display_values[-1]
 
     def status_of(self, value: float) -> str:
-        if self.band is None:
-            return STATUS_UNKNOWN
-        low, high = self.band
-        if value < low:
-            return STATUS_LOW
-        if value > high:
-            return STATUS_HIGH
-        return STATUS_IN
+        return status_in(value, self.band)
 
     @property
     def latest_status(self) -> str:

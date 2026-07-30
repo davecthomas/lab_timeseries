@@ -73,6 +73,28 @@ def make_series(values, band=(2.0, 8.0)):
     )
 
 
+class TestStatusIn:
+    """One rule, shared by the population band and every condition band."""
+
+    def test_below_above_and_within(self):
+        from lab_timeseries_grapher.data import status_in
+
+        assert status_in(10.9, (11.0, 13.5)) == STATUS_LOW
+        assert status_in(13.3, (11.0, 13.5)) == STATUS_IN
+        assert status_in(13.6, (11.0, 13.5)) == STATUS_HIGH
+
+    def test_the_boundaries_are_inclusive(self):
+        from lab_timeseries_grapher.data import status_in
+
+        assert status_in(11.0, (11.0, 13.5)) == STATUS_IN
+        assert status_in(13.5, (11.0, 13.5)) == STATUS_IN
+
+    def test_no_band_is_unknown(self):
+        from lab_timeseries_grapher.data import status_in
+
+        assert status_in(5.0, None) == STATUS_UNKNOWN
+
+
 class TestMetricSeries:
     def test_statuses(self):
         s = make_series([1.0, 5.0, 9.0])
