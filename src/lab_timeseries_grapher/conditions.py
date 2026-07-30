@@ -273,7 +273,23 @@ _COMPILED: tuple[tuple[Condition, Effect, re.Pattern], ...] = tuple(
     for effect in condition.effects
 )
 
-CONDITION_OPTIONS = [{"label": c.label, "value": c.id} for c in CONDITIONS]
+def condition_options(selected: list[str] | None = None) -> list[dict]:
+    """Checklist options: ticked conditions first, each group alphabetical.
+
+    The authored order of `CONDITIONS` is a table of contents, not a ranking,
+    and it leaves the reader scanning for a name. Alphabetical gives every
+    condition a predictable place; floating the ticked ones keeps what is
+    currently in play together at the top as the list grows.
+
+    Nothing here touches the colours or the bands — those are fields on each
+    condition, so re-ordering the control cannot move them.
+    """
+    chosen = set(selected or ())
+    ordered = sorted(CONDITIONS, key=lambda c: (c.id not in chosen, c.label.lower()))
+    return [{"label": c.label, "value": c.id} for c in ordered]
+
+
+CONDITION_OPTIONS = condition_options()
 
 
 def condition_by_id(condition_id: str) -> Condition | None:
@@ -338,3 +354,13 @@ def conditions_affecting(
         if applied:
             out[name] = applied
     return out
+
+
+def metrics_affected_by(metrics: dict, condition_id: str) -> set[str]:
+    """The metric names one condition touches, whether or not it draws a band.
+
+    A note-only condition still answers "which results does this bear on?" —
+    biotin interference is a reason to look at the thyroid panel even though
+    nothing is shaded on it.
+    """
+    return set(conditions_affecting(metrics, [condition_id]))

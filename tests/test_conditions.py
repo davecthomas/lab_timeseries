@@ -196,6 +196,98 @@ class TestLegend:
         assert "Not a diagnosis" in str(condition_legend(ALL_IDS))
 
 
+class TestConditionOptions:
+    """The checklist: ticked conditions first, alphabetical within each group."""
+
+    def _labels(self, options):
+        return [o["label"] for o in options]
+
+    def test_unselected_is_alphabetical(self):
+        labels = self._labels(conditions.condition_options())
+        assert labels == sorted(labels, key=str.lower)
+
+    def test_selected_float_to_the_top(self):
+        options = conditions.condition_options(["non-fasting-draw"])
+        assert options[0]["value"] == "non-fasting-draw"
+
+    def test_each_group_is_alphabetical(self):
+        options = conditions.condition_options(["thalassemia-trait", "gilbert-syndrome"])
+        labels = self._labels(options)
+        assert labels[:2] == ["Gilbert syndrome", "Thalassemia trait"]
+        assert labels[2:] == sorted(labels[2:], key=str.lower)
+
+    def test_every_condition_is_still_offered(self):
+        for selected in ([], ["biotin-supplement"], ALL_IDS):
+            values = [o["value"] for o in conditions.condition_options(selected)]
+            assert sorted(values) == sorted(ALL_IDS)
+
+    def test_the_module_default_matches_no_selection(self):
+        assert conditions.CONDITION_OPTIONS == conditions.condition_options()
+
+
+class TestMetricsAffectedBy:
+    def test_reports_the_metrics_one_condition_touches(self):
+        metrics = {
+            "MCV": series("MCV"),
+            "Hemoglobin": series("Hemoglobin", "g/dL", (13.7, 17.5), 13.3),
+            "Sodium": series("Sodium", "mmol/L", (135.0, 145.0), 140.0),
+        }
+        assert conditions.metrics_affected_by(metrics, "thalassemia-trait") == {
+            "MCV",
+            "Hemoglobin",
+        }
+
+    def test_a_note_only_condition_still_names_its_metrics(self):
+        """Nothing is shaded for biotin, but those results are still the ones
+        it bears on."""
+        metrics = {"TSH": series("TSH", "mIU/L", (0.4, 4.0), 2.0), "MCV": series("MCV")}
+        assert conditions.metrics_affected_by(metrics, "biotin-supplement") == {"TSH"}
+
+    def test_an_unknown_condition_touches_nothing(self):
+        assert conditions.metrics_affected_by({"MCV": series()}, "not-a-condition") == set()
+
+
+class TestConditionReading:
+    """The card reports the latest value against the condition band as well as
+    the population band — the screenshot case: low for the reference, normal
+    for thalassemia trait."""
+
+    def _hemoglobin(self, value=13.3):
+        return series("Hemoglobin (hgb)", "g/dL", (13.7, 17.5), value)
+
+    def _card_text(self, value=13.3, condition_ids=("thalassemia-trait",)):
+        s = self._hemoglobin(value)
+        return str(chart_card(s, None, conditions.effects_for(s.name, s.units, list(condition_ids))))
+
+    def test_it_reports_normal_for_the_condition_while_low_overall(self):
+        text = self._card_text()
+        assert "▼ low" in text  # the population verdict is unchanged
+        assert "normal for Thalassemia trait" in text
+
+    def test_below_the_condition_band_too_reads_low_for_it(self):
+        assert "▼ low for Thalassemia trait" in self._card_text(value=9.0)
+
+    def test_above_the_condition_band_reads_high_for_it(self):
+        assert "▲ high for Thalassemia trait" in self._card_text(value=16.0)
+
+    def test_a_note_only_condition_adds_no_reading(self):
+        s = series("Troponin I", "ng/mL", (0.0, 0.04), 0.01)
+        text = str(chart_card(s, None, conditions.effects_for(s.name, s.units, ["biotin-supplement"])))
+        assert "for Biotin supplement" not in text
+
+    def test_no_conditions_selected_adds_no_reading(self):
+        assert "normal for" not in str(chart_card(self._hemoglobin(), None, None))
+
+    def test_the_sidebar_verdict_is_untouched(self):
+        """A condition may add a reading; it may never edit the flag — the rule
+        that keeps a ticked checkbox from hiding a real abnormality."""
+        from lab_timeseries_grapher.layout import build_table_rows
+
+        rows = build_table_rows({"Hemoglobin (hgb)": self._hemoglobin()})
+        assert rows[0]["status"] == "low"
+        assert rows[0]["status_glyph"] == "▼"
+
+
 class TestConditionsAffecting:
     def test_reports_only_touched_metrics(self):
         metrics = {"MCV": series("MCV"), "Sodium": series("Sodium", "mmol/L", (135.0, 145.0), 140.0)}

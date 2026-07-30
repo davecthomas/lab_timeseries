@@ -10,8 +10,8 @@ from dash import dash_table, dcc, html
 from . import theme
 from .analyses import window_label
 from .commentary import configured_model_name
-from .conditions import CONDITION_OPTIONS, effects_for, selected_conditions
-from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries
+from .conditions import condition_options, effects_for, selected_conditions
+from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries, status_in
 from .figures import make_figure
 from .reference_ranges import describe_reference, varies_with_profile
 from .synonyms import format_synonyms
@@ -20,6 +20,13 @@ INITIAL_METRIC_COUNT = 10
 
 STATUS_GLYPH = {STATUS_LOW: "▼", STATUS_HIGH: "▲", STATUS_IN: "●"}
 STATUS_FLAG_TEXT = {STATUS_LOW: "▼ low", STATUS_HIGH: "▲ high", STATUS_IN: "● in range"}
+# Read against a condition's own band the question is different — "is this what
+# the condition looks like?" — so the wording is too: "normal for X", never a
+# bare "in range" that could be mistaken for the population verdict. Sitting
+# inside the band takes no glyph: the condition's own swatch is already beside
+# the words, and a second dot beside it just read as a smudge. ▼/▲ stay, because
+# outside even the condition's band is worth a shape of its own.
+CONDITION_STATUS_TEXT = {STATUS_LOW: "▼ low", STATUS_HIGH: "▲ high", STATUS_IN: "normal"}
 
 DATE_WINDOWS = [
     {"label": "All", "value": "all"},
@@ -108,10 +115,19 @@ def condition_legend(selected: list[str] | None) -> html.Div:
         # A condition with no band gets a hollow swatch: there is nothing
         # shaded on the charts for it, and a filled key would imply there is.
         swatch_class = "legend-swatch" if condition.has_bands else "legend-swatch legend-swatch-empty"
+        # Each entry is the control for its own condition: clicking it drops
+        # the charts that condition has nothing to say about, leaving the ones
+        # it bears on. A key that already names the condition is the obvious
+        # place to ask for that.
         items.append(
-            html.Span(
-                className="legend-item",
-                title=f"{condition.summary} — {condition.source}",
+            html.Button(
+                id={"type": "condition-chart", "index": condition.id},
+                className="legend-item legend-item-action",
+                n_clicks=0,
+                title=(
+                    f"Show only the charted metrics {condition.label} bears on — "
+                    f"{condition.summary} — {condition.source}"
+                ),
                 children=[
                     html.Span(
                         className=swatch_class,
@@ -130,8 +146,8 @@ def condition_legend(selected: list[str] | None) -> html.Div:
         )
     items.append(
         html.Span(
-            "Shown alongside the normal range, which is unchanged. "
-            "Not a diagnosis.",
+            "Click a condition to keep only the charts it bears on. Shown "
+            "alongside the normal range, which is unchanged. Not a diagnosis.",
             className="legend-caveat",
         )
     )
@@ -176,6 +192,47 @@ def profile_scope_note(metrics: dict[str, MetricSeries]) -> str:
     )
 
 
+def condition_readings(series: MetricSeries, condition_effects: list | None) -> list:
+    """The latest value read against each condition band that applies.
+
+    A single "low" answers only the population question, which is the wrong
+    question for a carrier: 13.3 g/dL is below the population floor *and*
+    exactly where beta thalassemia trait puts it. Both readings are shown so
+    the reader can see which one they are looking at.
+
+    This adds a reading; it never edits one. The population flag keeps its
+    wording, its colour and its glyph, and the sidebar verdict is untouched —
+    a condition that could rewrite a flag could hide a real abnormality, which
+    is the rule `conditions.py` exists to hold. Only the condition's hue rides
+    along here, on the dot, so the extra text cannot read as a second verdict;
+    the glyph and the words carry the status on their own.
+    """
+    readings: list = []
+    for applied in condition_effects or []:
+        if not applied.band:
+            continue  # note-only: nothing to measure the value against
+        status = status_in(series.latest_value, applied.band)
+        if status not in CONDITION_STATUS_TEXT:
+            continue
+        readings.append(
+            html.Span(
+                [
+                    html.Span(
+                        className="condition-dot",
+                        style={"background": applied.condition.color},
+                    ),
+                    f"{CONDITION_STATUS_TEXT[status]} for {applied.condition.label}",
+                ],
+                className="latest-condition",
+                title=(
+                    f"{applied.condition.label} range "
+                    f"{applied.band[0]:g}–{applied.band[1]:g} {series.units}".strip()
+                ),
+            )
+        )
+    return readings
+
+
 def chart_card(
     series: MetricSeries,
     cutoff: pd.Timestamp | None,
@@ -186,6 +243,7 @@ def chart_card(
     latest_children: list = [f"Latest {series.latest_display}"]
     if series.latest_status in STATUS_FLAG_TEXT:
         latest_children.append(html.Span(f" {STATUS_FLAG_TEXT[series.latest_status]}", className=flag_class))
+    latest_children.extend(condition_readings(series, condition_effects))
 
     head = [html.H2(series.name)]
     if series.units:
@@ -825,7 +883,9 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                     dcc.Checklist(
                         id="conditions-select",
                         className="conditions-list",
-                        options=CONDITION_OPTIONS,
+                        # Alphabetical to start; a callback re-sorts on every
+                        # tick so the selected ones lead.
+                        options=condition_options(),
                         value=[],
                         labelClassName="conditions-item",
                     ),

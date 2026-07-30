@@ -155,6 +155,91 @@ class TestOutOfRangeTileSelects:
         assert resolve_selection("select-all", None, ["A"], [], None) == ["A"]
 
 
+class TestResolveConditionTrigger:
+    """Dash fires a callback when its Input component is *recreated*, not only
+    when it is clicked. Ticking a condition rebuilds the legend, so without this
+    guard the newly rebuilt button would narrow the charts on its own.
+    """
+
+    @staticmethod
+    def _button(condition_id="thalassemia-trait"):
+        return {"type": "condition-chart", "index": condition_id}
+
+    def test_a_real_click_yields_the_condition_id(self):
+        from lab_timeseries_grapher.app import CONDITION_CLICK, resolve_condition_trigger
+
+        trigger, condition_id = resolve_condition_trigger(self._button(), True)
+        assert (trigger, condition_id) == (CONDITION_CLICK, "thalassemia-trait")
+
+    def test_a_rebuilt_button_yields_no_trigger(self):
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        assert resolve_condition_trigger(self._button(), False) == (None, None)
+
+    def test_another_control_passes_through_untouched(self):
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        assert resolve_condition_trigger("tile-out-of-range", True) == ("tile-out-of-range", None)
+
+    def test_another_pattern_matching_id_passes_through_untouched(self):
+        """Only this pattern type is ours; card-add ids must survive intact."""
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        other = {"type": "card-add", "index": "MCV"}
+        assert resolve_condition_trigger(other, True) == (other, None)
+
+    def test_no_trigger_at_all_passes_through(self):
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        assert resolve_condition_trigger(None, False) == (None, None)
+
+
+class TestConditionLegendNarrows:
+    """Clicking a condition narrows what is already charted to the metrics that
+    condition bears on. It never pulls in metrics the reader had not asked for.
+    """
+
+    def test_it_drops_the_charts_the_condition_says_nothing_about(self):
+        out = resolve_selection(
+            "condition-chart", ["MCV", "Sodium", "MCH"], [], [], [], [], ["MCV", "MCH", "RBC"]
+        )
+        assert out == ["MCV", "MCH"]
+
+    def test_it_adds_nothing_that_was_not_already_charted(self):
+        """RBC is the condition's metric too, but it was not on screen."""
+        out = resolve_selection(
+            "condition-chart", ["MCV"], [], [], [], [], ["MCV", "MCH", "RBC"]
+        )
+        assert out == ["MCV"]
+
+    def test_it_keeps_the_order_the_charts_were_already_in(self):
+        out = resolve_selection(
+            "condition-chart", ["MCH", "MCV"], [], [], [], [], ["MCV", "MCH"]
+        )
+        assert out == ["MCH", "MCV"]
+
+    def test_no_overlap_leaves_the_charts_alone(self):
+        """Emptying the view would answer a question nobody asked."""
+        out = resolve_selection(
+            "condition-chart", ["Sodium", "Glucose"], [], [], [], [], ["MCV"]
+        )
+        assert out == ["Sodium", "Glucose"]
+
+    def test_a_condition_touching_nothing_leaves_the_charts_alone(self):
+        out = resolve_selection("condition-chart", ["A"], ["A"], ["A"], ["A"], [], [])
+        assert out == ["A"]
+
+    def test_other_triggers_ignore_the_condition_list(self):
+        out = resolve_selection("metric-search", ["A"], ["A"], ["A"], ["A"], [], ["MCV"])
+        assert out == ["A"]
+
+    def test_the_out_of_range_tile_still_wins_its_own_list(self):
+        out = resolve_selection(
+            "tile-out-of-range", ["A"], ["A"], ["A"], ["A"], ["B"], ["MCV"]
+        )
+        assert out == ["B"]
+
+
 class TestConsentGate:
     def test_first_click_opens_dialog_and_does_not_run(self):
         show, store, runs = resolve_consent("ai-analyze", None, [], 0)
@@ -358,6 +443,23 @@ class TestOutOfRangeTile:
 
     def test_a_real_click_filters(self):
         assert self._callback(create_app(sample_metrics()))(1) == ["on"]
+
+
+class TestConditionOptionsCallback:
+    """The checklist re-sorts itself as conditions are ticked."""
+
+    @staticmethod
+    def _callback(app):
+        registered = app.callback_map["conditions-select.options"]["callback"]
+        return getattr(registered, "__wrapped__", registered)
+
+    def test_ticked_conditions_lead(self):
+        options = self._callback(create_app(sample_metrics()))(["non-fasting-draw"])
+        assert options[0]["value"] == "non-fasting-draw"
+
+    def test_nothing_ticked_is_alphabetical(self):
+        labels = [o["label"] for o in self._callback(create_app(sample_metrics()))([])]
+        assert labels == sorted(labels, key=str.lower)
 
 
 class TestProfileScopeNote:

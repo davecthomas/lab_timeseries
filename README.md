@@ -11,7 +11,8 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - **Add data** — record a new result from the toolbar, the sidebar, or the ＋ on any chart
 - **Import CSV** — merge a lab export, with a preview of what changes
 - **Clean up data** — find and repair duplicates, broken numbers and missing units, with a preview
-- **Relevant conditions** — declare a benign condition and see the range it would explain, drawn alongside the normal one
+- **Relevant conditions** — declare a benign condition and see the range it would explain, drawn alongside the normal one, with each metric read against both
+- Click a condition in the legend to keep only the charts it bears on
 - Click the **Out of range** tile to filter the list to just those tests
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
@@ -58,7 +59,7 @@ Some people have a persistent, harmless reason for a result to sit outside the p
 Ticking a condition in the sidebar draws **an extra band, in its own colour, alongside the normal one**:
 
 ```
-MCH   Latest 22.4 pg ▼ low
+MCH   Latest 22.4 pg ▼ low │ ■ normal for Thalassemia trait
       Range 26–32 pg · age/sex reference 27–32 pg
       ■ Thalassemia trait: a low MCH accompanies the small red cells of
         thalassemia trait, typically 19–26 pg.
@@ -66,9 +67,13 @@ MCH   Latest 22.4 pg ▼ low
 
 The green normal band stays where it was, the purple band shows 19–26, and the point sits in the purple — still flagged low, but now visibly *explained*.
 
+The card reads the latest value against both ranges and reports both. `▼ low` is the population verdict; beside it, `normal for Thalassemia trait` says the same 22.4 pg is where the condition puts it. A value below the condition's band as well reads `▼ low for Thalassemia trait`, so you can tell "still low even for this" from "low, and this accounts for it".
+
 **The normal band and the out-of-range flags never change.** That is deliberate. Replacing the band would mean a ticked checkbox could silently hide a real abnormality: a carrier who later becomes iron deficient still needs their falling MCV to register. Showing both boundaries lets you see the value, the population range, and the range the condition would account for, and decide which you are looking at.
 
 One legend covers the whole chart set. Colours separate by hue rather than lightness, since the bands overlap, and every band is also named in text on the card it affects — the colour never carries the meaning by itself.
+
+Each legend entry is also a control: click a condition to keep only the charts it bears on. It narrows what is on screen, so a click never pulls in results you had not asked to see. If none of the current charts relate to that condition, they stay as they are. The sidebar list is alphabetical, and ticked conditions sort to the top.
 
 Some conditions add a note and no band. Biotin interference is not a shifted interval, it is an unreliable measurement, so inventing a range for it would misrepresent what is known; those are marked *(note only)* in the legend. Where a band cannot be converted into the metric's units it is dropped rather than rescaled, and the note still stands.
 

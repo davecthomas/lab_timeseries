@@ -16,6 +16,7 @@ from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
 from . import analyses, cleanup, entries, export, ingest, theme
 from .commentary import CommentaryError, generate_commentary
+from .conditions import condition_options, metrics_affected_by
 from .data import STATUS_HIGH, STATUS_LOW, MetricSeries
 from .layout import (
     ai_error as ai_error_body,
@@ -256,6 +257,32 @@ def resolve_pane_view(
     return active, visible
 
 
+CONDITION_CLICK = "condition-chart"
+
+
+def resolve_condition_trigger(trigger, real_click: bool) -> tuple[object, str | None]:
+    """Normalize a legend-button trigger into (trigger, condition id).
+
+    Dash rebuilds the legend whenever a condition is ticked and fires for the
+    recreated buttons, so a trigger alone does not mean a click — only a real
+    click carries a count. Without this the newly rebuilt button would narrow
+    the charts the instant its condition was ticked.
+
+    Extracted from the callback for the same reason `resolve_pane_view` is:
+    Dash's wrapper rebuilds the callback context, so a test cannot inject a
+    `triggered_id`, and logic left inline cannot be covered.
+
+    Returns the trigger to act on (`CONDITION_CLICK`, or None when the button
+    was merely recreated, or the original trigger when it was something else)
+    and the condition id when there is one.
+    """
+    if not isinstance(trigger, dict) or trigger.get("type") != CONDITION_CLICK:
+        return trigger, None
+    if not real_click:
+        return None, None
+    return CONDITION_CLICK, trigger.get("index")
+
+
 def resolve_selection(
     trigger: str | None,
     stored: list[str] | None,
@@ -263,6 +290,7 @@ def resolve_selection(
     prev_visible_ids: list[str],
     selected_visible: list[str] | None,
     out_of_range_ids: list[str] | None = None,
+    condition_metric_ids: list[str] | None = None,
 ) -> list[str]:
     """Next stored selection for whichever control fired.
 
@@ -275,9 +303,20 @@ def resolve_selection(
     to do nothing. It reads from `out_of_range_ids` rather than `listed_ids`
     because the filter it also switches on lands in a separate callback
     invocation, so the rows may not have narrowed yet when this one runs.
+
+    A legend click works the other way round: it narrows what is already
+    charted to the metrics that condition bears on, rather than charting every
+    metric it touches. The whole set would pull in results the reader never
+    asked to see; the question a legend click asks is "of what I am looking at,
+    which of these does this condition explain?". With no overlap there is
+    nothing to narrow to, so the selection is left alone rather than emptied.
     """
     if trigger == "tile-out-of-range":
         return list(out_of_range_ids or [])
+    if trigger == CONDITION_CLICK:
+        related = set(condition_metric_ids or ())
+        kept = [i for i in (stored or []) if i in related]
+        return kept or list(stored or [])
     if trigger == "select-all":
         kept = list(stored or [])
         kept_set = set(kept)
@@ -338,30 +377,40 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
         Input("select-all", "n_clicks"),
         Input("clear-all", "n_clicks"),
         Input("tile-out-of-range", "n_clicks"),
+        Input({"type": "condition-chart", "index": ALL}, "n_clicks"),
         Input("metric-table", "selected_row_ids"),
         Input("data-version", "data"),
         State("metric-table", "data"),
         State("selection-store", "data"),
     )
     def update_table(
-        search, panel, abnormal_only, _select, _clear, _tile, selected_row_ids,
-        _version, prev_rows, stored,
+        search, panel, abnormal_only, _select, _clear, _tile, _condition_clicks,
+        selected_row_ids, _version, prev_rows, stored,
     ):
         rows = filter_rows(data.table_rows, search, panel, abnormal_only or [])
         listed_ids = [r["id"] for r in rows]
         prev_visible_ids = [r["id"] for r in prev_rows or []]
 
         trigger = ctx.triggered_id
-        if trigger == "tile-out-of-range" and not (
-            ctx.triggered and ctx.triggered[0].get("value")
-        ):
+        real_click = bool(ctx.triggered and ctx.triggered[0].get("value"))
+        if trigger == "tile-out-of-range" and not real_click:
             # Refreshing the stat tiles rebuilds the tile, and Dash fires for a
             # recreated component. Only a real click carries a count.
             trigger = None
 
+        # The legend hits the same trap, so it gets the same guard — see
+        # resolve_condition_trigger. The full set the condition touches goes to
+        # resolve_selection, which narrows it against the current selection and
+        # keeps the charts in the order they were already in.
+        trigger, condition_id = resolve_condition_trigger(trigger, real_click)
+        condition_metric_ids: list[str] = (
+            sorted(metrics_affected_by(data.metrics, condition_id)) if condition_id else []
+        )
+
         selection = resolve_selection(
             trigger, stored, listed_ids, prev_visible_ids, selected_row_ids,
             [r["id"] for r in data.table_rows if r["status"] in {STATUS_LOW, STATUS_HIGH}],
+            condition_metric_ids,
         )
         selected = set(selection)
         selected_rows = [i for i, r in enumerate(rows) if r["id"] in selected]
@@ -748,6 +797,18 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
     def update_condition_legend(conditions_selected):
         legend = condition_legend(conditions_selected)
         return legend.children, legend.style
+
+    @app.callback(
+        Output("conditions-select", "options"),
+        Input("conditions-select", "value"),
+    )
+    def sort_condition_options(conditions_selected):
+        """Float the ticked conditions to the top, alphabetical within each group.
+
+        Options only — the value is left alone, so this cannot cycle: re-sorting
+        the list never changes what is ticked.
+        """
+        return condition_options(conditions_selected)
 
     @app.callback(
         Output("stat-tiles", "children"),

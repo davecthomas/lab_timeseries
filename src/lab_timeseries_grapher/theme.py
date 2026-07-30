@@ -162,6 +162,20 @@ body {
     opacity: 0.75;
 }
 .legend-swatch-empty { border-style: dotted; opacity: 1; }
+/* Legend entries are buttons (click to chart that condition's metrics), so the
+   browser's button chrome is stripped back to the span they used to be. */
+.legend-item-action {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0.15rem 0.35rem;
+    margin: -0.15rem -0.35rem;
+    font: inherit;
+    color: #c3c2b7;
+    cursor: pointer;
+}
+.legend-item-action:hover { color: #ffffff; border-color: rgba(255, 255, 255, 0.22); }
+.legend-item-action:focus-visible { outline: 2px solid #3987e5; outline-offset: 1px; }
 .legend-aside { color: #898781; }
 .legend-caveat { color: #898781; margin-left: auto; font-size: 0.72rem; }
 .card-condition {
@@ -857,6 +871,19 @@ body {
 }
 .chart-card .latest .flag-high, .chart-card .latest .flag-low { color: #d03b3b; font-weight: 600; }
 .chart-card .latest .flag-in { color: #0ca30c; font-weight: 600; }
+/* The condition reading sits beside the population flag, deliberately quieter:
+   the flag is the verdict, this is context for it. Its only colour is the
+   condition's own hue on the dot, so it cannot read as a competing verdict. */
+.chart-card .latest .latest-condition {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0.5rem;
+    padding-left: 0.5rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
+    color: #898781;
+    font-weight: 400;
+}
 .empty-note {
     color: #898781;
     font-size: 0.85rem;
