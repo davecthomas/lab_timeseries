@@ -257,6 +257,32 @@ def resolve_pane_view(
     return active, visible
 
 
+CONDITION_CLICK = "condition-chart"
+
+
+def resolve_condition_trigger(trigger, real_click: bool) -> tuple[object, str | None]:
+    """Normalize a legend-button trigger into (trigger, condition id).
+
+    Dash rebuilds the legend whenever a condition is ticked and fires for the
+    recreated buttons, so a trigger alone does not mean a click — only a real
+    click carries a count. Without this the newly rebuilt button would narrow
+    the charts the instant its condition was ticked.
+
+    Extracted from the callback for the same reason `resolve_pane_view` is:
+    Dash's wrapper rebuilds the callback context, so a test cannot inject a
+    `triggered_id`, and logic left inline cannot be covered.
+
+    Returns the trigger to act on (`CONDITION_CLICK`, or None when the button
+    was merely recreated, or the original trigger when it was something else)
+    and the condition id when there is one.
+    """
+    if not isinstance(trigger, dict) or trigger.get("type") != CONDITION_CLICK:
+        return trigger, None
+    if not real_click:
+        return None, None
+    return CONDITION_CLICK, trigger.get("index")
+
+
 def resolve_selection(
     trigger: str | None,
     stored: list[str] | None,
@@ -287,7 +313,7 @@ def resolve_selection(
     """
     if trigger == "tile-out-of-range":
         return list(out_of_range_ids or [])
-    if trigger == "condition-chart":
+    if trigger == CONDITION_CLICK:
         related = set(condition_metric_ids or ())
         kept = [i for i in (stored or []) if i in related]
         return kept or list(stored or [])
@@ -372,19 +398,14 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
             # recreated component. Only a real click carries a count.
             trigger = None
 
-        # Same trap on the legend, which a callback rebuilds whenever the
-        # condition selection changes: ticking a condition recreates its button
-        # and would otherwise instantly narrow the charts on its own.
-        condition_metric_ids: list[str] = []
-        if isinstance(trigger, dict) and trigger.get("type") == "condition-chart":
-            if real_click:
-                # The full set the condition touches; the narrowing against the
-                # current selection happens in resolve_selection, which keeps
-                # the charts in the order they were already in.
-                condition_metric_ids = sorted(metrics_affected_by(data.metrics, trigger["index"]))
-                trigger = "condition-chart"
-            else:
-                trigger = None
+        # The legend hits the same trap, so it gets the same guard — see
+        # resolve_condition_trigger. The full set the condition touches goes to
+        # resolve_selection, which narrows it against the current selection and
+        # keeps the charts in the order they were already in.
+        trigger, condition_id = resolve_condition_trigger(trigger, real_click)
+        condition_metric_ids: list[str] = (
+            sorted(metrics_affected_by(data.metrics, condition_id)) if condition_id else []
+        )
 
         selection = resolve_selection(
             trigger, stored, listed_ids, prev_visible_ids, selected_row_ids,

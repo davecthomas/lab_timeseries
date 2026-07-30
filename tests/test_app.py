@@ -155,6 +155,45 @@ class TestOutOfRangeTileSelects:
         assert resolve_selection("select-all", None, ["A"], [], None) == ["A"]
 
 
+class TestResolveConditionTrigger:
+    """Dash fires a callback when its Input component is *recreated*, not only
+    when it is clicked. Ticking a condition rebuilds the legend, so without this
+    guard the newly rebuilt button would narrow the charts on its own.
+    """
+
+    @staticmethod
+    def _button(condition_id="thalassemia-trait"):
+        return {"type": "condition-chart", "index": condition_id}
+
+    def test_a_real_click_yields_the_condition_id(self):
+        from lab_timeseries_grapher.app import CONDITION_CLICK, resolve_condition_trigger
+
+        trigger, condition_id = resolve_condition_trigger(self._button(), True)
+        assert (trigger, condition_id) == (CONDITION_CLICK, "thalassemia-trait")
+
+    def test_a_rebuilt_button_yields_no_trigger(self):
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        assert resolve_condition_trigger(self._button(), False) == (None, None)
+
+    def test_another_control_passes_through_untouched(self):
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        assert resolve_condition_trigger("tile-out-of-range", True) == ("tile-out-of-range", None)
+
+    def test_another_pattern_matching_id_passes_through_untouched(self):
+        """Only this pattern type is ours; card-add ids must survive intact."""
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        other = {"type": "card-add", "index": "MCV"}
+        assert resolve_condition_trigger(other, True) == (other, None)
+
+    def test_no_trigger_at_all_passes_through(self):
+        from lab_timeseries_grapher.app import resolve_condition_trigger
+
+        assert resolve_condition_trigger(None, False) == (None, None)
+
+
 class TestConditionLegendNarrows:
     """Clicking a condition narrows what is already charted to the metrics that
     condition bears on. It never pulls in metrics the reader had not asked for.
