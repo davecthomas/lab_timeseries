@@ -13,7 +13,7 @@ A [Dash](https://dash.plotly.com/) web app for exploring blood-test results over
 - **Clean up data** — find and repair duplicates, broken numbers and missing units, with a preview
 - **Relevant conditions** — declare a benign condition and see the range it would explain, drawn alongside the normal one, with each metric read against both
 - Click a condition in the legend to keep only the charts it bears on
-- Click the **Out of range** tile to filter the list to just those tests
+- Click the **Out of range** tile to chart the tests that are out of range in recent bloodwork (measured within 12 months of your newest draw)
 - Search, panel filter (CBC, metabolic, lipid, …), and an out-of-range-only toggle
 - Select all / clear all, and date window presets (all / 5 y / 2 y / 1 y)
 - **Export CSV** — downloads the selected metrics as `blood-metrics-YYYY-MM-DD.csv`
