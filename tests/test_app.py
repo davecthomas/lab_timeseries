@@ -13,7 +13,7 @@ from lab_timeseries_grapher.app import (
     resolve_selection,
     selection_order,
 )
-from lab_timeseries_grapher.data import MetricSeries
+from lab_timeseries_grapher.data import STATUS_HIGH, STATUS_LOW, MetricSeries
 from lab_timeseries_grapher.layout import (
     ai_error,
     build_table_rows,
@@ -507,3 +507,26 @@ class TestProfileScopeNote:
 
     def test_empty_data_does_not_claim_a_count(self):
         assert "0 of 0" not in profile_scope_note({})
+
+
+class TestAbnormalFilterRecency:
+    """The filter and the tile must answer the same question, or the list shows
+    a decade of retired test names while the charts show this year's.
+    """
+
+    @staticmethod
+    def _row(name, status, current):
+        return {"id": name, "name": name, "status": status, "panel": "CBC", "current": current}
+
+    def test_stale_abnormal_rows_are_excluded(self):
+        rows = [self._row("New", STATUS_LOW, True), self._row("Old", STATUS_LOW, False)]
+        assert [r["id"] for r in filter_rows(rows, None, None, ["on"])] == ["New"]
+
+    def test_unfiltered_still_shows_everything(self):
+        rows = [self._row("New", STATUS_LOW, True), self._row("Old", STATUS_LOW, False)]
+        assert len(filter_rows(rows, None, None, [])) == 2
+
+    def test_rows_without_the_flag_are_treated_as_current(self):
+        """Defensive: a row built before this field existed must not vanish."""
+        rows = [{"id": "A", "name": "A", "status": STATUS_HIGH, "panel": "CBC"}]
+        assert len(filter_rows(rows, None, None, ["on"])) == 1

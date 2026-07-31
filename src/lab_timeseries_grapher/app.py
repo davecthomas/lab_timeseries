@@ -17,7 +17,7 @@ from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from . import analyses, cleanup, entries, export, ingest, theme
 from .commentary import CommentaryError, generate_commentary
 from .conditions import condition_options, metrics_affected_by
-from .data import STATUS_HIGH, STATUS_LOW, MetricSeries
+from .data import STATUS_HIGH, STATUS_LOW, MetricSeries, out_of_range_now
 from .layout import (
     ai_error as ai_error_body,
 )
@@ -54,7 +54,14 @@ def filter_rows(
     if panel:
         rows = [r for r in rows if r["panel"] == panel]
     if abnormal_only:
-        rows = [r for r in rows if r["status"] in {STATUS_LOW, STATUS_HIGH}]
+        # Currency is part of the question. A metric last drawn in 2019 has a
+        # status, but it describes 2019 — listing it here put seven retired
+        # spellings of MCV and HGB alongside this year's results.
+        rows = [
+            r
+            for r in rows
+            if r["status"] in {STATUS_LOW, STATUS_HIGH} and r.get("current", True)
+        ]
     return rows
 
 
@@ -409,7 +416,7 @@ def create_app(data: AppData | dict[str, MetricSeries]) -> Dash:
 
         selection = resolve_selection(
             trigger, stored, listed_ids, prev_visible_ids, selected_row_ids,
-            [r["id"] for r in data.table_rows if r["status"] in {STATUS_LOW, STATUS_HIGH}],
+            out_of_range_now(data.metrics),
             condition_metric_ids,
         )
         selected = set(selection)

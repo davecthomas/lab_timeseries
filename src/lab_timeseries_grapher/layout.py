@@ -11,7 +11,17 @@ from . import theme
 from .analyses import window_label
 from .commentary import configured_model_name
 from .conditions import condition_options, effects_for, selected_conditions
-from .data import STATUS_HIGH, STATUS_IN, STATUS_LOW, MetricSeries, status_in
+from .data import (
+    RECENT_MONTHS,
+    STATUS_HIGH,
+    STATUS_IN,
+    STATUS_LOW,
+    MetricSeries,
+    is_current,
+    newest_draw,
+    out_of_range_now,
+    status_in,
+)
 from .figures import make_figure
 from .reference_ranges import describe_reference, varies_with_profile
 from .synonyms import format_synonyms
@@ -39,12 +49,17 @@ DATE_WINDOWS = [
 def build_table_rows(metrics: dict[str, MetricSeries]) -> list[dict]:
     """Sidebar table rows, newest last-draw first."""
     ordered = sorted(metrics.values(), key=lambda m: m.last_date, reverse=True)
+    newest = newest_draw(metrics)
     rows = []
     for m in ordered:
         rows.append(
             {
                 "id": m.name,
                 "name": m.name,
+                # Carried on the row so the out-of-range filter and the tile
+                # answer the same question; otherwise the list shows a decade
+                # of retired test names while the charts show this year's.
+                "current": is_current(m, newest),
                 "status": m.latest_status,
                 "status_glyph": STATUS_GLYPH.get(m.latest_status, ""),
                 "latest_display": m.latest_display,
@@ -68,7 +83,7 @@ def stat_tiles(metrics: dict[str, MetricSeries]) -> html.Div:
     """Header summary: metric count, draw count, latest draw, out-of-range count."""
     all_dates = {d.date() for m in metrics.values() for d in m.dates}
     latest = max(m.last_date for m in metrics.values()) if metrics else None
-    out_count = sum(1 for m in metrics.values() if m.latest_status in {STATUS_LOW, STATUS_HIGH})
+    out_count = len(out_of_range_now(metrics))
 
     def tile(label: str, value: str, note: str = "") -> html.Div:
         children = [html.P(label, className="tile-label"), html.P(value, className="tile-value")]
@@ -87,11 +102,14 @@ def stat_tiles(metrics: dict[str, MetricSeries]) -> html.Div:
                 id="tile-out-of-range",
                 className="stat-tile stat-tile-action",
                 n_clicks=0,
-                title="Chart the metrics that are out of range",
+                title="Chart the metrics that are out of range in recent bloodwork",
                 children=[
                     html.P("Out of range", className="tile-label"),
                     html.P(f"▲▼ {out_count}", className="tile-value"),
-                    html.P("at latest result · click to chart", className="tile-note"),
+                    html.P(
+                        f"measured in the last {RECENT_MONTHS} months · click to chart",
+                        className="tile-note",
+                    ),
                 ],
             ),
         ],
@@ -924,7 +942,7 @@ def build_layout(metrics: dict[str, MetricSeries], table_rows: list[dict]) -> ht
                 className="abnormal-toggle",
                 children=dcc.Checklist(
                     id="abnormal-only",
-                    options=[{"label": "Out-of-range only (latest result)", "value": "on"}],
+                    options=[{"label": "Out of range in recent bloodwork", "value": "on"}],
                     value=[],
                 ),
             ),

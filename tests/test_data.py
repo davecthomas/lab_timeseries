@@ -294,3 +294,71 @@ class TestPrepareTestsDescription:
     def test_missing_notes_column_is_fine(self):
         df = labs_frame([["2024-01-01", "ALT", "25", "25", "U/L", "0", "50", "CMP"]])
         assert prepare_tests(df)["ALT"].description == ""
+
+
+class TestOutOfRangeRecency:
+    """"Out of range" means "in my recent bloodwork". `latest_status` alone
+    answers a different question — how each metric's own last reading landed,
+    whenever that was — which surfaced seven retired spellings of MCV and HGB
+    from 2019 alongside this year's results.
+    """
+
+    @staticmethod
+    def _series(name, last_date, value, band=(10.0, 20.0)):
+        stamp = pd.Timestamp(last_date)
+        return data.MetricSeries(
+            name=name, dates=[stamp], values=[value], display_values=[f"{value:g}"],
+            band=band, units="g/dL", panel="CBC", lab_band=band,
+        )
+
+    def test_a_recent_abnormal_metric_counts(self):
+        metrics = {"A": self._series("A", "2026-01-01", 5.0)}
+        assert data.out_of_range_now(metrics) == ["A"]
+
+    def test_a_stale_abnormal_metric_does_not(self):
+        metrics = {
+            "New": self._series("New", "2026-01-01", 15.0),   # in range, sets "now"
+            "Old": self._series("Old", "2019-01-01", 5.0),    # abnormal but ancient
+        }
+        assert data.out_of_range_now(metrics) == []
+
+    def test_recency_is_relative_to_the_newest_draw_not_today(self):
+        """The file may be historical; the question is still 'most recent'."""
+        metrics = {
+            "Ref": self._series("Ref", "2019-06-01", 15.0),
+            "Old": self._series("Old", "2019-01-01", 5.0),
+        }
+        assert data.out_of_range_now(metrics) == ["Old"]
+
+    def test_the_boundary_is_inclusive(self):
+        metrics = {
+            "New": self._series("New", "2026-01-01", 15.0),
+            "Edge": self._series("Edge", "2025-01-01", 5.0),  # exactly 12 months
+        }
+        assert data.out_of_range_now(metrics) == ["Edge"]
+
+    def test_just_past_the_boundary_drops_out(self):
+        metrics = {
+            "New": self._series("New", "2026-01-01", 15.0),
+            "Edge": self._series("Edge", "2024-12-31", 5.0),
+        }
+        assert data.out_of_range_now(metrics) == []
+
+    def test_in_range_metrics_never_count(self):
+        metrics = {"A": self._series("A", "2026-01-01", 15.0)}
+        assert data.out_of_range_now(metrics) == []
+
+    def test_ordered_newest_first(self):
+        metrics = {
+            "Older": self._series("Older", "2026-01-01", 5.0),
+            "Newer": self._series("Newer", "2026-06-01", 25.0),
+        }
+        assert data.out_of_range_now(metrics) == ["Newer", "Older"]
+
+    def test_empty_metrics(self):
+        assert data.out_of_range_now({}) == []
+        assert data.newest_draw({}) is None
+
+    def test_is_current_without_a_reference_date_admits_everything(self):
+        s = self._series("A", "1999-01-01", 5.0)
+        assert data.is_current(s, None)

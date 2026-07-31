@@ -327,3 +327,49 @@ def validate_schema(df: pd.DataFrame) -> None:
     if missing:
         logger.error("CSV missing required columns: %s", missing)
         raise SystemExit(f"Missing required columns: {missing}")
+
+
+# A metric counts as current if it was measured within this many months of the
+# newest draw in the file. Panels are drawn on different days, so "the most
+# recent draw date" is far too narrow — one date here holds two metrics.
+RECENT_MONTHS = 12
+
+
+def newest_draw(metrics: dict[str, MetricSeries]) -> pd.Timestamp | None:
+    """The most recent date any metric was measured."""
+    return max((m.last_date for m in metrics.values()), default=None)
+
+
+def is_current(
+    series: MetricSeries,
+    newest: pd.Timestamp | None,
+    months: int = RECENT_MONTHS,
+) -> bool:
+    """True when this metric was measured recently enough to still speak.
+
+    A metric last drawn in 2019 has a `latest_status`, but that status answers
+    a question about 2019. Treating it as a present finding is how a retired
+    lab's spelling of MCV ends up reported alongside this year's.
+    """
+    if newest is None:
+        return True
+    return series.last_date >= newest - pd.DateOffset(months=months)
+
+
+def out_of_range_now(
+    metrics: dict[str, MetricSeries], months: int = RECENT_MONTHS
+) -> list[str]:
+    """Metrics that are out of range *and* current, newest first.
+
+    This is what "out of range" means to a reader looking at the dashboard:
+    what is wrong with my recent bloodwork. `latest_status` alone answers the
+    different question of how each metric's own last reading landed, whenever
+    that was.
+    """
+    newest = newest_draw(metrics)
+    flagged = [
+        m
+        for m in metrics.values()
+        if m.latest_status in {STATUS_LOW, STATUS_HIGH} and is_current(m, newest, months)
+    ]
+    return [m.name for m in sorted(flagged, key=lambda m: m.last_date, reverse=True)]
