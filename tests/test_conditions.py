@@ -309,3 +309,44 @@ class TestConditionsAffecting:
             )
         }
         assert conditions.conditions_affecting(realistic, [condition_id])
+
+
+class TestRdwIsNotWidened:
+    """RDW is the discriminator between thalassemia trait and iron deficiency:
+    the trait makes cells uniformly small, so it does not raise RDW. Giving RDW
+    a widened band would explain away the one number saying the trait is not
+    the whole story.
+    """
+
+    def test_rdw_gets_a_note_but_never_a_band(self):
+        applied = conditions.effects_for("RDW", "%", ["thalassemia-trait"])
+        assert len(applied) == 1
+        assert applied[0].band is None
+        assert applied[0].note
+
+    def test_the_note_points_away_from_the_trait(self):
+        note = conditions.effects_for("RDW", "%", ["thalassemia-trait"])[0].note
+        assert "additional cause" in note
+        assert "iron" in note.lower()
+
+    def test_a_high_rdw_keeps_its_flag(self):
+        """No band means nothing can soften the population verdict."""
+        s = series(name="RDW", units="%", band=(12.0, 14.0), value=15.0)
+        assert s.latest_status == "high"
+        fig = make_figure(s, None, conditions.effects_for("RDW", "%", ["thalassemia-trait"]))
+        assert len(fig.layout.shapes) == 1  # the normal band alone
+
+    @pytest.mark.parametrize(
+        "name", ["RDW", "RDW (rbc Distribution Width)", "Red Cell Distribution Width"]
+    )
+    def test_rdw_spellings_do_not_fall_through_to_the_rbc_rule(self, name):
+        """'RDW (rbc Distribution Width)' contains 'rbc'; the count note would
+        be wrong here and must not win."""
+        applied = conditions.effects_for(name, "%", ["thalassemia-trait"])
+        assert len(applied) == 1, name
+        assert "RDW is typically normal" in applied[0].note, name
+
+    def test_the_rbc_rule_still_matches_actual_counts(self):
+        for name in ("RBC", "Red Cell Count", "Red Blood Cell Count"):
+            applied = conditions.effects_for(name, "", ["thalassemia-trait"])
+            assert applied and "red cell count" in applied[0].note.lower(), name

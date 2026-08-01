@@ -78,8 +78,25 @@ CONDITIONS: tuple[Condition, ...] = (
             "lowers it."
         ),
         color="#a06cd5",
-        source="StatPearls: Beta Thalassemia; Alpha Thalassemia (NCBI Bookshelf)",
+        source=(
+            "StatPearls: Beta Thalassemia; Alpha Thalassemia (NCBI Bookshelf). "
+            "RDW discrimination: England & Fraser, Lancet 1973; Mentzer, Lancet 1973"
+        ),
         effects=(
+            # RDW first, and deliberately without a band. The trait makes cells
+            # uniformly small, so it does not raise RDW — that is the classic
+            # discriminator from iron deficiency, where cells are small *and*
+            # variable. Widening RDW here would explain away the one number
+            # that says the trait is not the whole story.
+            Effect(
+                pattern=r"^rdw|distribution width",
+                note=(
+                    "RDW is typically normal in thalassemia trait — the small "
+                    "cells are uniformly small. A raised RDW alongside a low "
+                    "MCV points to an additional cause, commonly iron "
+                    "deficiency, rather than being explained by the trait."
+                ),
+            ),
             Effect(
                 pattern=r"^mcv|mean corpuscular volume",
                 note=(
