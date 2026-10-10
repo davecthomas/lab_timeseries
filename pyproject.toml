@@ -19,6 +19,7 @@ dependencies = [
 # CLI entry point used by `poetry run lab-timeseries-grapher`
 [project.scripts]
 lab-timeseries-grapher = "lab_timeseries_grapher.cli:main"
+lab-digest = "lab_timeseries_grapher.digest:main"
 
 [tool.poetry]
 name = "lab-timeseries-grapher"
@@ -39,6 +40,7 @@ python-dotenv = ">=1.0.0"
 # Mirror the CLI entry point for Poetry's script runner
 [tool.poetry.scripts]
 lab-timeseries-grapher = "lab_timeseries_grapher.cli:main"
+lab-digest = "lab_timeseries_grapher.digest:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0"

@@ -12,6 +12,8 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 | `src/lab_timeseries_grapher/ingest.py` | CSV import: column inference and the merge plan |
 | `src/lab_timeseries_grapher/cleanup.py` | Data repair: duplicate, truncation and unit detection, and the fix plan |
 | `src/lab_timeseries_grapher/conditions.py` | Authored, cited benign conditions and the extra bands/notes they add |
+| `src/lab_timeseries_grapher/digest.py` | `lab-digest` CLI: the labs CSV as compact markdown for an LLM, built on `prepare_tests` so flags match the charts |
+| `.claude/skills/read-blood-metrics/` | Agent skill: read the user's results through `lab-digest`, never the raw CSV |
 | `tests/` | pytest suite for data shaping, figures, prompt assembly, and callback helpers |
 | `data/` | Gitignored lab CSVs — never commit or paste contents; values are personal health data |
 | `.github/workflows/` | CI: ruff + pytest |
@@ -25,6 +27,7 @@ Dash web app that charts personal blood-test results over time, with normal-rang
 | Test | `make test` |
 | Lint | `make lint` |
 | Lint + test | `make check` |
+| LLM-readable digest of the labs | `poetry run lab-digest` (`--help` for filters) |
 
 ## Conventions
 
