@@ -1,5 +1,6 @@
 import pytest
 
+from lab_timeseries_grapher import reference_ranges
 from lab_timeseries_grapher.reference_ranges import (
     Profile,
     canonical_units,
@@ -97,3 +98,17 @@ class TestDescribeReference:
 
     def test_none(self):
         assert describe_reference(None) == ""
+
+
+class TestCitations:
+    def test_every_source_is_listed_in_the_module_docstring(self):
+        """A source key that names no listed citation is an uncited range."""
+        doc = reference_ranges.__doc__
+        for name in ("TSH", "Free T4", "Hemoglobin", "PSA", "Sed Rate", "Vitamin D"):
+            ref = reference_for(name)
+            assert f"\n{ref.source} " in doc, f"{name} cites unlisted source {ref.source}"
+
+    def test_tsh_cites_its_own_source(self):
+        ref = reference_for("Thyroid Stimulating Hormone")
+        assert (ref.low, ref.high, ref.source) == (0.4, 4.8, "TSH")
+

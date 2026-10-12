@@ -21,6 +21,8 @@ LIPID    NCEP ATP III classification, via StatPearls "Cholesterol Levels"
          https://www.ncbi.nlm.nih.gov/books/NBK542294/
 FT4      Mayo Clinic Laboratories, T4 (Thyroxine), Free, Serum
          https://endocrinology.testcatalog.org/show/FRT4
+TSH      MedlinePlus, TSH test
+         https://medlineplus.gov/ency/article/003684.htm
 A1C      ADA diagnostic thresholds, via StatPearls "Hemoglobin A1C"
          https://www.ncbi.nlm.nih.gov/books/NBK549816/
 URIC     MedlinePlus, Uric acid - blood
@@ -80,7 +82,7 @@ def _esr(profile: Profile) -> Reference:
 RULES: tuple[tuple[str, object], ...] = (
     # --- Thyroid ---
     (r"t4.*free|free.*t4", lambda p: Reference(0.9, 1.7, "ng/dL", "FT4")),
-    (r"thyroid stimulating|^tsh", lambda p: Reference(0.4, 4.0, "mIU/L", "FT4", "guideline range")),
+    (r"thyroid stimulating|^tsh", lambda p: Reference(0.4, 4.8, "mIU/L", "TSH")),
     # --- Glucose ---
     (r"hemoglobin a1c|a1c", lambda p: Reference(None, 5.7, "%", "A1C", "below the prediabetes threshold")),
     (r"glucose", lambda p: Reference(70.0, 100.0, "mg/dL", "CMP", "fasting")),
